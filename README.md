@@ -86,17 +86,18 @@ Create a backup of your key which is ASCII armored.  In the following replace
     gpg --export-secret-keys -a <KEY ID> >> gpg_example_pub-sec.asc
 
 From now on any GPG examples will be using the `secrets/gpg_example_pub-sec.asc`
-key which has a key id of `DAB5AED9`
+key which has a key id of `DAB5AED9`.
+
+### Encrypting
 
 Before running any examples for GPG you might want to import the example GPG
 key.
 
-
-### Encrypting
-
+    gpg --import secrets/gpg_example_pub-sec.asc
 
 Encrypt a single file to a single recipient.  In this case, use the example GPG
-key to encrypt this README.
+key to encrypt this README.  If you get a warning when encrypting its because of
+the trust level of the recipient; ignore it because this is just an example.
 
     gpg  -e --recipient DAB5AED9 -- "README.md"
 
@@ -114,5 +115,11 @@ Decrypt a file and have it remove the extension and automatically output to the
 same file name.
 
     echo "README.md.gpg" | gpg --multifile --decrypt --
+
+Now that you're probably done with these examples go ahead and delete the
+example key from your key chain.
+
+    gpg --delete-secret-keys DAB5AED9
+    gpg --delete-key DAB5AED9
 
 [fedora-wiki]: https://fedoraproject.org/wiki/Creating_GPG_Keys#Creating_GPG_Keys_Using_the_Command_Line
