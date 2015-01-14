@@ -21,6 +21,14 @@ more efficient to use synchronous encryption (e.g. AES256) on large files.  One
 way to go about it is to use a session key for the synchronous encryption and
 then encrypt the session key using asynchronous encryption.
 
+Another drawback to consider, build artifacts will have the decrypted
+secrets.  There's not much that can be done about that because at some point in
+the lifecycle of the code it needs to be decrypted to be used in production.
+This mainly discusses decrypting secrets as part of the build process.
+Therefore, it is also the intention that the repository may be public but the
+build artifacts are behind a secure gateway requiring some form of
+authorization.
+
 # A possible solution
 
 For encrypting strings using asynchronous encryption, I am selecting RSA public
@@ -66,7 +74,7 @@ completing the wizard prompts over at the [Fedora project wiki][fedora-wiki].
 
     gpg --gen-key
 
-List your newly generate key so that you may get the Key ID.
+List your newly generated key so that you may get the Key ID.
 
     gpg --list-keys
 
