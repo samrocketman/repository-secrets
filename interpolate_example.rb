@@ -3,6 +3,8 @@
 require 'openssl'
 require 'base64'
 private_key_file="secrets/id_rsa"
+#this text tag is the supersecret in ${supersecret:ciphertext}, this makes it configurable
+secret_text_tag="supersecret"
 
 def decrypt(ciphertext,private_key_file)
   private_key=OpenSSL::PKey::RSA.new(File.read(private_key_file))
@@ -11,9 +13,9 @@ def decrypt(ciphertext,private_key_file)
 end
 
 somefile=File.read('examples/myconfig.json')
-secrets=somefile.scan(/\${supersecret:[^}]*}/)
+secrets=somefile.scan(/\${#{Regexp.escape(secret_text_tag)}:[^}]*}/)
 secrets.each do |secret|
-  ciphertext=secret.gsub(/\${supersecret:([^}]*)}/,'\1')
+  ciphertext=secret.gsub(/\${#{Regexp.escape(secret_text_tag)}:([^}]*)}/,'\1')
   somefile.gsub!(secret,decrypt(ciphertext,private_key_file))
 end
 puts somefile
