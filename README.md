@@ -27,7 +27,8 @@ the lifecycle of the code it needs to be decrypted to be used in production.
 This mainly discusses decrypting secrets as part of the build process.
 Therefore, it is also the intention that the repository may be public but the
 build artifacts are behind a secure gateway requiring some form of
-authorization.
+authorization.  This can be somewhat mitigated by developer best practices
+and how the project is designed (both in source and architecture).
 
 # A possible solution
 
