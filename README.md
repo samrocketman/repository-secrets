@@ -8,9 +8,10 @@ those secrets with a private key.
 
 * [Drawbacks and alternative for files](#drawbacks-and-alternative-for-files)
 * [A possible solution](#a-possible-solution)
-  * [Asynchronous encryption](#asynchronous-encryption)
-  * [Asynchronous encrypting a synchronous session key](#asynchronous-encrypting-a-synchronous-session-key)
-* [Supporting inline secrets](#supporting-inline-secrets)
+  * [Asynchronous encryption](#asynchronous-encryption) (for strings)
+  * [Asynchronous encrypting a synchronous session
+    key](#asynchronous-encrypting-a-synchronous-session-key) (for files)
+* [Supporting inline secrets](#supporting-inline-secrets) (for strings in files)
 
 # Drawbacks and alternative for files
 
