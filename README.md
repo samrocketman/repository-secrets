@@ -43,14 +43,14 @@ Generate an RSA private and public key pair.
 Encrypt a plaintext string to be stored in a repository.  This encrypts using
 the public key.
 
-    echo -n 'plaintext' | openssl rsautl -encrypt -inkey /tmp/id_rsa.pub -pubin | base64 -w0
+    echo -n 'plaintext' | openssl rsautl -encrypt -inkey secrets/id_rsa.pub -pubin | base64 -w0
 
 ### Decrypting
 
 Decrypt a ciphertext string to be used by the CI system or delivery pipeline.
 This decrypts using the private key.
 
-    echo 'ciphertext' | base64 -d | openssl rsautl -decrypt -inkey /tmp/id_rsa
+    echo 'ciphertext' | base64 -d | openssl rsautl -decrypt -inkey secrets/id_rsa
 
 ## Asynchronous encrypting a synchronous session key
 
@@ -121,5 +121,27 @@ example key from your key chain.
 
     gpg --delete-secret-keys DAB5AED9
     gpg --delete-key DAB5AED9
+
+# Supporting inline secrets
+
+Inline secrets are just as important as encrypting strings or files.  Inline
+secrets are what make encrypting strings useful in a configuration that might
+need to only be partially secure.  An example of an inline secret would be
+embedding a unique string in a config file that can be substituted with the
+plain text equivalent of the secret string.  Another term for that is string
+interpolation.  For example, see [`myconfig.json`](examples/myconfig.json) which
+uses an inline secret, `${supersecret:ciphertext}`.  The inline secret can use
+string interpolation with something like a regular expression from `sed` (e.g.
+`${supersecret:[^}]*}`).
+
+When the string interpolation is done on `myconfig.json` it would have the
+plaintext contents of:
+
+```json
+{
+  "somesetting": "another setting",
+  "some_secure_setting": "super secret setting"
+}
+```
 
 [fedora-wiki]: https://fedoraproject.org/wiki/Creating_GPG_Keys#Creating_GPG_Keys_Using_the_Command_Line

@@ -1,0 +1,4 @@
+{
+  "somesetting": "another setting",
+  "some_secure_setting": "${supersecret:azLjx6UzV3Jm3LIysOgT8tDjWviVksf8PEJgiMocgOiT9ebEaYspOHjDYE3aoap5OzvdegA/Q1g+lkyf1yUkcxim428NPwOVU20JcbZYLve798k69sTXzGqfNILluRI+oBMqGe35+r31oenHzj8UIG/H+pHGxFue4ExqMiTbdog=}"
+}
