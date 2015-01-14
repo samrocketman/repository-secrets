@@ -6,6 +6,12 @@ The idea is you encrypt secrets with a public key that can be widely
 distributed.  Then on a CI system or within a delivery pipeline you decrypt
 those secrets with a private key.
 
+* [Drawbacks and alternative for files](#drawbacks-and-alternative-for-files)
+* [A possible solution](#a-possible-solution)
+  * [Asynchronous encryption](#asynchronous-encryption)
+  * [Asynchronous encrypting a synchronous session key](#asynchronous-encrypting-a-synchronous-session-key)
+* [Supporting inline secrets](#supporting-inline-secrets)
+
 # Drawbacks and alternative for files
 
 This uses asynchronous encryption (e.g. RSA key pair) which is best used on
@@ -26,8 +32,6 @@ there is a certain flexibility of being able to encrypt files for the CI system
 or delivery pipeline but still allow a developer to easily decrypt the files as
 well.  This is because files can be encrypted with multiple GPG keys able to
 decrypt the same file.
-
-# A quick example
 
 ## Asynchronous encryption
 
