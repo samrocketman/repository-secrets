@@ -85,7 +85,8 @@ confirm if you *really* want to take away the password (you do).  `gpg> save`
 will save your changes and exit GPG.
 
 Create a backup of your key which is ASCII armored.  In the following replace
-`<KEY ID>` with your GPG key id.
+`<KEY ID>` with your GPG key id.  *Note: for wide distribution only the public
+key needs exporting (the first command).*
 
     gpg --export -a <KEY ID> > gpg_example_pub-sec.asc
     gpg --export-secret-keys -a <KEY ID> >> gpg_example_pub-sec.asc
