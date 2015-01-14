@@ -11,7 +11,7 @@ secret_text_tag="supersecret"
 #First decodes base64 ciphertext input and then decrypts; returns plain text
 def decrypt(ciphertext,private_key_file)
   private_key=OpenSSL::PKey::RSA.new(File.read(private_key_file))
-  plaintext=private_key.private_decrypt(Base64.decode64(ciphertext))
+  plaintext=private_key.private_decrypt(Base64.strict_decode64(ciphertext))
   return plaintext
 end
 
