@@ -165,4 +165,63 @@ Run a simple [ruby example](interpolate_example.rb) of string interpolation.
 ruby interpolate_example.rb
 ```
 
+# repository-secrets cli utility
+
+[`repository-secrets.rb`](repository-secrets.rb) was meant for both ends of this
+equation.  It's meant to be used by developers to encrypt their secrets and by
+the build system to decrypt the secrets.  Here's the command line documentation.
+
+```
+Usage: repository-secrets.rb [options] [arguments]
+
+This is a full featured command line utility for performing string interpolation
+on encrypted secrets in plain text files in a repository.
+
+There are two modes: Encrypt and Decrypt.  Encrypt mode is on by default.
+
+Encryption options:
+       Each argument that is passed without being associated with options, will
+       be interpreted as an argument.  Each argument will be encrypted as a
+       secure property.  Secure properties can be copied and pasted into a
+       source file as a secret.
+
+       If no arguments are passed in then stdin will be read for strings to be
+       encrypted.
+
+        --public-key FILE            Path to a public key to use for encryption.
+
+Decryption options:
+       Using any of these options will turn on Decrypt mode.
+
+        --private-key FILE           Path to a private key to use for
+                                     decryption.
+    -s, --secrets-file FILE          Path to a secrets FILE; the contents
+                                     contain one file per line.  It will do
+                                     string interpolation on each file in the
+                                     list replacing secrets with the decrypted
+                                     text.  File paths are either full path or
+                                     relative to the current working directory.
+    -f, --file FILE                  Use string interpolation on the specified
+                                     FILE to decrypt secrets.
+    -i, --inplace [EXTENSION]        Perform string interpolation on files with
+                                     in-place editing.  Otherwise print
+                                     decrypted file to stdout.
+                                       (make backup if EXTENSION supplied)
+
+Common options:
+       These options are common to both Encrypt and Decrypt modes.
+
+        --secret-text-tag TAG        Change the unique text which defines the
+                                     tag to be interpolated in files.  By
+                                     default: supersecret
+    -v, --[no-]verbose               Run more verbosely.
+                                       (more verbosity with -vv or -vvv)
+                                       WARNING: -vvv displays plain text secrets
+    -d, --decrypt                    Force Decrypt mode to be on.  Not really
+                                     necessary.
+    -h, --help                       Show this message
+        --version                    Show version
+
+```
+
 [fedora-wiki]: https://fedoraproject.org/wiki/Creating_GPG_Keys#Creating_GPG_Keys_Using_the_Command_Line
