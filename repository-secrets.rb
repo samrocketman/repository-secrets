@@ -110,11 +110,15 @@ class OptparseExample
 
       # Optional argument; multi-line description.
       opts.on("-i", "--inplace [EXTENSION]",
-              "Edit string interpolated files in place",
+              "Perform string interpolation on files with",
+              "in-place editing.  Otherwise print",
+              "decrypted file to stdout.",
               "  (make backup if EXTENSION supplied)") do |ext|
         options.inplace = true
-        options.extension = ext || ''
-        options.extension.sub!(/\A\.?(?=.)/, ".")  # Ensure extension begins with dot.
+        options.extension = ext
+        if options.extension
+          options.extension.sub!(/\A\.?(?=.)/, ".")  # Ensure extension begins with dot.
+        end
         options.decrypt = true
       end
 
@@ -131,8 +135,9 @@ class OptparseExample
       end
 
       opts.on("-v", "--[no-]verbose",
-              "Run verbosely",
-              "  (more verbosity with -vv or -vvv)") do |v|
+              "Run more verbosely.",
+              "  (more verbosity with -vv or -vvv)",
+              "  WARNING: -vvv displays plain text secrets") do |v|
         #increment verbosity by 1 for each -v used
         if v
           options.verbose += 1
@@ -171,23 +176,19 @@ end # verbose()
 
 #First decodes base64 cipher text input and then decrypts; returns plain text
 def decrypt(ciphertext)
-  if $options.verbose > 2
-    puts "v3> decrypt(#{ciphertext})"
-  end
+  verbose 3, "decrypt(\"#{ciphertext}\")"
   private_key=OpenSSL::PKey::RSA.new(File.read($options.private_key_file))
   plaintext=private_key.private_decrypt(Base64.strict_decode64(ciphertext))
-  if $options.verbose > 2
-    puts "v3>  returns #{plaintext}"
-  end
+  verbose 3, "  returns \"#{plaintext}\""
   return plaintext
 end # decrypt()
 
 #First encrypts plain text input and then encodes in base64; returns cipher text
 def encrypt(plaintext)
-  verbose 3, "encrypt(#{plaintext})"
+  verbose 3, "encrypt(\"#{plaintext}\")"
   public_key = OpenSSL::PKey::RSA.new(File.read($options.public_key_file))
   ciphertext = Base64.strict_encode64(public_key.public_encrypt(plaintext))
-  verbose 3, "  returns #{ciphertext}"
+  verbose 3, "  returns \"#{ciphertext}\""
   return ciphertext
 end # encrypt()
 
@@ -204,15 +205,46 @@ verbose 2, "Arguments data structures (parsed and passed)"
 verbose 2, PP.pp($options, "")
 verbose 2, PP.pp(ARGV, "")
 
-if ARGV.length > 0
+if (ARGV.length > 0) || $options.decrypt
   if $options.decrypt
     verbose 0, "Performing decryption with string interpolation on files."
-#    if $options.
-#    f = File.open("my/file/path", "r")
-#    f.each_line do |line|
-#      puts line
-#    end
-#    f.close
+    if $options.inplace
+      verbose 0, "Inplace editing enabled for all files."
+    end
+    #read the secrets file
+    if $options.secrets_file
+      verbose 0, "Reading a secrets file for a list of files."
+      f = File.open($options.secrets_file, "r")
+      f.each_line do |line|
+        #skip blank lines
+        next if line.strip.length == 0
+        #skip lines that start with a hash
+        next if /^\s*#.*/.match(line.strip)
+        $options.files << line.strip
+      end
+      f.close
+    end
+    $options.files.each do |file|
+      verbose 0, "Performing string interpolation on: #{file}"
+      filecontents = File.read(file)
+      secrets = filecontents.scan(/\${#{Regexp.escape($options.secret_text_tag)}:[^}]*}/)
+      secrets.each do |secret|
+        #extract just the cipher text from the secret
+        ciphertext=secret.gsub(/\${#{Regexp.escape($options.secret_text_tag)}:([^}]*)}/,'\1')
+        #inline string replace the secret with the plain text
+        filecontents.gsub!(secret,decrypt(ciphertext))
+      end
+      if $options.inplace
+        if $options.extension
+        else
+          f = File.open(file,"w")
+          f.write(filecontents)
+          f.close()
+        end
+      else
+        puts filecontents
+      end
+    end
   else
     ARGV.each do |plaintext|
       puts "${#{$options.secret_text_tag}:#{encrypt(plaintext.strip)}}"
@@ -231,11 +263,13 @@ else
 end
 
 #output info message to stderr
-verbose 0, ""
-verbose 0, "Replace the plain text string in your config file with the secure one."
-verbose 0, "NOTE: Don't forget to regenerate passwords or API keys if you've already"
-verbose 0, "committed them to the repository and published it as plain text."
-verbose 0, ""
+if not $options.decrypt
+  verbose 0, ""
+  verbose 0, "Replace the plain text string in your config file with the secure one."
+  verbose 0, "NOTE: Don't forget to regenerate passwords or API keys if you've already"
+  verbose 0, "committed them to the repository and published it as plain text."
+  verbose 0, ""
+end
 
 #CHANGELOG
 #0.1.0 - initial release
