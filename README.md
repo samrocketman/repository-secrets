@@ -14,6 +14,7 @@ those secrets with a private key.
 * [Supporting inline secrets](#supporting-inline-secrets) (for strings in files)
 * [repository-secrets cli utility](#repository-secrets-cli-utility) (a user
   friendly utility)
+  * [Examples](#examples)
 
 # Drawbacks and alternative for files
 
