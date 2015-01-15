@@ -21,7 +21,7 @@ somefile=File.read('examples/myconfig.json')
 secrets=somefile.scan(/\${#{Regexp.escape(secret_text_tag)}:[^}]*}/)
 #loop over each found secret
 secrets.each do |secret|
-  #exctract just the cipher text from the secret
+  #extract just the cipher text from the secret
   ciphertext=secret.gsub(/\${#{Regexp.escape(secret_text_tag)}:([^}]*)}/,'\1')
   #replace the secret with the plain text
   somefile.gsub!(secret,decrypt(ciphertext,private_key_file))
