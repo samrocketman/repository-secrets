@@ -12,6 +12,8 @@ those secrets with a private key.
   * [Asynchronous encrypting a synchronous session
     key](#asynchronous-encrypting-a-synchronous-session-key) (for files)
 * [Supporting inline secrets](#supporting-inline-secrets) (for strings in files)
+* [repository-secrets cli utility](#repository-secrets-cli-utility) (a user
+  friendly utility)
 
 # Drawbacks and alternative for files
 
