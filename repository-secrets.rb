@@ -19,6 +19,8 @@ require 'optparse'
 require 'ostruct'
 #pretty printing of ruby objects
 require 'pp'
+#for file copying
+require 'fileutils'
 
 #The version of this program
 Version = [0, 1, 0]
@@ -236,11 +238,13 @@ if (ARGV.length > 0) || $options.decrypt
       end
       if $options.inplace
         if $options.extension
-        else
-          f = File.open(file,"w")
-          f.write(filecontents)
-          f.close()
+          FileUtils.cp(file, file+$options.extension)
+          verbose 1, "Making a backup of #{file} to #{file+$options.extension}"
         end
+        verbose 1, "Writing to #{file}"
+        f = File.open(file,"w")
+        f.write(filecontents)
+        f.close()
       else
         puts filecontents
       end
