@@ -226,4 +226,22 @@ Common options:
 
 ```
 
+## Examples
+
+Enter interactive mode to generate secrets (from a user perspective).
+
+    ./repository-secrets.rb
+
+Decrypt secrets and output to `stdout`.
+
+    ./repository-secrets.rb -f examples/myconfig.json
+
+Decrypt secrets in a list of files and do inline replacement.
+
+    ./repository-secrets.rb -s ./.supersecrets -i
+
+Same example but creating a backup of the files being decrypted.
+
+    ./repository-secrets.rb -s ./.supersecrets -i.bak
+
 [fedora-wiki]: https://fedoraproject.org/wiki/Creating_GPG_Keys#Creating_GPG_Keys_Using_the_Command_Line
