@@ -8,9 +8,9 @@ those secrets with a private key.
 
 * [Drawbacks and alternative for files](#drawbacks-and-alternative-for-files)
 * [A possible solution](#a-possible-solution)
-  * [Asynchronous encryption](#asynchronous-encryption) (for strings)
-  * [Asynchronous encrypting a synchronous session
-    key](#asynchronous-encrypting-a-synchronous-session-key) (for files)
+  * [Asymmetric encryption](#asymmetric-encryption) (for strings)
+  * [Asymmetric encrypting a symmetric session
+    key](#asymmetric-encrypting-a-symmetric-session-key) (for files)
 * [Supporting inline secrets](#supporting-inline-secrets) (for strings in files)
 * [repository-secrets cli utility](#repository-secrets-cli-utility) (a user
   friendly utility)
@@ -18,11 +18,11 @@ those secrets with a private key.
 
 # Drawbacks and alternative for files
 
-This uses asynchronous encryption (e.g. RSA key pair) which is best used on
+This uses asymmetric encryption (e.g. RSA key pair) which is best used on
 small strings.  However, for large files this method is very inefficient.  It is
-more efficient to use synchronous encryption (e.g. AES256) on large files.  One
-way to go about it is to use a session key for the synchronous encryption and
-then encrypt the session key using asynchronous encryption.
+more efficient to use symmetric encryption (e.g. AES256) on large files.  One
+way to go about it is to use a session key for the symmetric encryption and
+then encrypt the session key using asymmetric encryption.
 
 Another drawback to consider, build artifacts will have the decrypted
 secrets.  There's not much that can be done about that because at some point in
@@ -35,18 +35,18 @@ and how the project is designed (both in source and architecture).
 
 # A possible solution
 
-For encrypting strings using asynchronous encryption, I am selecting RSA public
+For encrypting strings using asymmetric encryption, I am selecting RSA public
 key encryption and using `openssl` tools.
 
 For large files, rather than re-invent the wheel GPG does a great job at
-encrypting session keys with asynchronous encryption and then
-encrypting/decrypting files with synchronous encryption.  Also, by using GPG
+encrypting session keys with asymmetric encryption and then
+encrypting/decrypting files with symmetric encryption.  Also, by using GPG
 there is a certain flexibility of being able to encrypt files for the CI system
 or delivery pipeline but still allow a developer to easily decrypt the files as
 well.  This is because files can be encrypted with multiple GPG keys able to
 decrypt the same file.
 
-## Asynchronous encryption
+## Asymmetric encryption
 
 ### Setting up key pair
 
@@ -69,7 +69,7 @@ This decrypts using the private key.
 
     echo 'ciphertext' | base64 -d | openssl rsautl -decrypt -inkey secrets/id_rsa
 
-## Asynchronous encrypting a synchronous session key
+## Asymmetric encrypting a symmetric session key
 
 ### Setting up GPG
 
