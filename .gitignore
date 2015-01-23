@@ -1,1 +1,3 @@
 /README.md.gpg
+#don't match private keys whose file names are based on public key fingerprint
+/secrets/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]
