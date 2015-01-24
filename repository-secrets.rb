@@ -12,8 +12,9 @@
 #  repository.
 
 #required for encryption/decryption
-require 'openssl'
 require 'base64'
+require 'digest/sha1'
+require 'openssl'
 #required for option parsing
 require 'optparse'
 #pretty printing of ruby objects
@@ -192,6 +193,38 @@ def encrypt(plaintext)
   verbose 3, "  returns \"#{ciphertext}\""
   return ciphertext
 end # encrypt()
+
+#Fingerprint data by taking the first 8 characters of the sha1 hash.
+#In the context of this program a public key is being used as data for the fingerprint.
+def fingerprint(public_key)
+  verbose 3, "fingerprint(\"#{public_key}\")"
+  fingerprint = (Digest::SHA1.hexdigest public_key).slice(0..7)
+  verbose 3, "  returns \"#{fingerprint}\""
+  return fingerprint
+end
+
+#Generates a public key pair and writes out the file names based on the
+#fingerprint of the public key.
+def generate_fingerprinted_key_pair(destination, bits)
+  verbose 3, "generate_fingerprinted_key_pair()"
+  verbose 1, "Generating new key pair."
+  rsa_key = OpenSSL::PKey::RSA.new(bits)
+  private_key = rsa_key.to_s
+  public_key = rsa_key.public_key.to_pem.to_s
+  fingerprint = fingerprint(public_key)
+  verbose 1, "Writing out private key: #{destination + fingerprint}"
+  #write out the private key
+  f = File.open(destination + fingerprint, "w")
+  f.write(private_key)
+  f.close()
+  verbose 1, "Writing out public key: #{destination + fingerprint}.pub"
+  #write out the public key
+  f = File.open(destination + fingerprint + ".pub", "w")
+  f.write(public_key)
+  f.close()
+  verbose 3, "  returns #{fingerprint}"
+  return fingerprint
+end
 
 ################################################################################
 # Runtime
