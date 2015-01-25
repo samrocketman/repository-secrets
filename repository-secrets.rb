@@ -152,7 +152,7 @@ class OptparseExample
               "use the fingerprint attached to the secret.") do |fingerprint|
         options["fingerprint"] = fingerprint
         if not options["fingerprint"]
-          options["fingerprint"] = true
+          options["fingerprint"] = ""
         end
       end
 
@@ -241,18 +241,18 @@ def verbose(level, text)
 end # verbose()
 
 #First decodes base64 cipher text input and then decrypts; returns plain text
-def decrypt(ciphertext)
-  verbose 3, "decrypt(\"#{ciphertext}\")"
-  private_key=OpenSSL::PKey::RSA.new(File.read($options["private_key_file"]))
+def decrypt(keypath, ciphertext)
+  verbose 3, "decrypt(\"#{keypath}\", \"#{ciphertext}\")"
+  private_key=OpenSSL::PKey::RSA.new(File.read(keypath))
   plaintext=private_key.private_decrypt(Base64.strict_decode64(ciphertext))
   verbose 3, "  returns \"#{plaintext}\""
   return plaintext
 end # decrypt()
 
 #First encrypts plain text input and then encodes in base64; returns cipher text
-def encrypt(plaintext)
-  verbose 3, "encrypt(\"#{plaintext}\")"
-  public_key = OpenSSL::PKey::RSA.new(File.read($options["public_key_file"]))
+def encrypt(keypath, plaintext)
+  verbose 3, "encrypt(\"#{keypath}\", \"#{plaintext}\")"
+  public_key = OpenSSL::PKey::RSA.new(File.read(keypath))
   ciphertext = Base64.strict_encode64(public_key.public_encrypt(plaintext))
   verbose 3, "  returns \"#{ciphertext}\""
   return ciphertext
@@ -317,6 +317,14 @@ def load_yaml(filepath)
         yaml_config["secrets_directory"] += '/'
       end
     end
+    if yaml_config.has_key?("fingerprint")
+      yaml_config["fingerprint"] = yaml_config["fingerprint"].to_s
+      if yaml_config["fingerprint"] == "true"
+        yaml_config["fingerprint"] = ""
+      elsif yaml_config["fingerprint"] == "false"
+        yaml_config["fingerprint"] = nil
+      end
+    end
   end
   if not yaml_config
     yaml_config = {}
@@ -346,6 +354,12 @@ elsif File.file?("repository-secrets.yml")
   yaml_config = load_yaml("repository-secrets.yml")
 end
 $options.merge!(yaml_config)
+
+#set the private and public keys if fingerprint used
+if $options["fingerprint"] and ($options["fingerprint"].length > 0)
+  $options["private_key_file"] = $options["secrets_directory"] + $options["fingerprint"]
+  $options["public_key_file"] = $options["secrets_directory"] + $options["fingerprint"] + ".pub"
+end
 
 #print out the structures
 verbose 2, "$options data structure after merging config file."
@@ -404,7 +418,11 @@ if (ARGV.length > 0) || $options["decrypt"]
     end
   else
     ARGV.each do |plaintext|
-      puts "${#{$options["secret_text_tag"]}:#{encrypt(plaintext.strip)}}"
+      if $options["fingerprint"]
+        puts "${#{$options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key_file"], plaintext.strip)}}"
+      else
+        puts "${#{$options["secret_text_tag"]}:#{encrypt($options["public_key_file"], plaintext.strip)}}"
+      end
     end
   end
 else
@@ -415,7 +433,11 @@ else
       exit 1
     end
     next if plaintext.strip.length == 0
-    puts "${#{$options["secret_text_tag"]}:#{encrypt(plaintext.strip)}}"
+    if $options["fingerprint"]
+      puts "${#{$options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key_file"], plaintext.strip)}}"
+    else
+      puts "${#{$options["secret_text_tag"]}:#{encrypt($options["public_key_file"], plaintext.strip)}}"
+    end
   end
 end
 
