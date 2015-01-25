@@ -21,6 +21,8 @@ require 'optparse'
 require 'pp'
 #for file copying
 require 'fileutils'
+#for processing repository-secrets.yml
+require 'yaml'
 
 #The version of this program
 Version = "0.1.1-SNAPSHOT"
@@ -288,6 +290,37 @@ def generate_fingerprinted_key_pair(destination, bits)
   return fingerprint
 end
 
+def load_yaml(filepath)
+  verbose 3, "load_yaml(\"#{filepath}\")"
+  yaml_config = YAML.load(File.read(filepath))
+  if yaml_config and yaml_config.has_key?("config")
+    filepath = yaml_config["config"]
+    yaml_config = YAML.load(File.read(filepath))
+  end
+  if yaml_config
+    if yaml_config.has_key?("verbose")
+      yaml_config["verbose"] = yaml_config["verbose"].to_i
+    end
+    if yaml_config.has_key?("bits")
+      yaml_config["bits"] = yaml_config["bits"].to_i
+      if yaml_config["bits"] < 1024
+        verbose 0, "WARNING: bits (from #{filepath}) less than 1024 is insecure.  Setting to 1024."
+        yaml_config["bits"] = 1024
+      end
+    end
+    if yaml_config.has_key?("secrets_directory")
+      if (yaml_config["secrets_directory"].length > 0) and not (yaml_config["secrets_directory"][-1] == '/')
+        yaml_config["secrets_directory"] += '/'
+      end
+    end
+  end
+  if not yaml_config
+    yaml_config = {}
+  end
+  verbose 3, "  returns #{yaml_config}"
+  return yaml_config
+end
+
 ################################################################################
 # Runtime
 ################################################################################
@@ -302,7 +335,17 @@ verbose 2, PP.pp($options, "")
 verbose 2, PP.pp(ARGV, "")
 
 #LOAD THE CONFIG FILE FOR OVERRIDES
+yaml_config = {}
+if File.file?($options["config"])
+  yaml_config = load_yaml($options["config"])
+elsif File.file?("repository-secrets.yml")
+  yaml_config = load_yaml("repository-secrets.yml")
+end
+$options.merge!(yaml_config)
 
+#print out the structures
+verbose 2, "$options data structure after merging config file."
+verbose 2, PP.pp($options, "")
 
 #DO ENCRYPTION OR DECRYPTION
 if (ARGV.length > 0) || $options["decrypt"]
