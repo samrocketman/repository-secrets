@@ -298,6 +298,10 @@ def load_yaml(filepath)
     yaml_config = YAML.load(File.read(filepath))
   end
   if yaml_config
+    if yaml_config.has_key?("generate_key_pair")
+      verbose 0, "ERROR: generate_key_pair not allowed in config file: #{filepath}"
+      exit 1
+    end
     if yaml_config.has_key?("verbose")
       yaml_config["verbose"] = yaml_config["verbose"].to_i
     end
@@ -346,6 +350,14 @@ $options.merge!(yaml_config)
 #print out the structures
 verbose 2, "$options data structure after merging config file."
 verbose 2, PP.pp($options, "")
+
+#GENERATE PUBLIC KEY PAIR
+if $options["generate_key_pair"]
+  fingerprint = generate_fingerprinted_key_pair($options["secrets_directory"], $options["bits"])
+  verbose 0, "Generated a fingerprinted key pair.  Place the following in your repository-secrets.yml"
+  verbose 0, "fingerprint: \"#{fingerprint}\""
+  exit
+end
 
 #DO ENCRYPTION OR DECRYPTION
 if (ARGV.length > 0) || $options["decrypt"]
