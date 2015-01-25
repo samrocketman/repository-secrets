@@ -296,10 +296,12 @@ end
 
 def load_yaml(filepath)
   verbose 3, "load_yaml(\"#{filepath}\")"
+  verbose 1, "Loading config from #{filepath}"
   yaml_config = YAML.load(File.read(filepath))
   #--config
   if yaml_config and yaml_config.has_key?("config")
     filepath = yaml_config["config"]
+    verbose 1, "Loading config from #{filepath}"
     yaml_config = YAML.load(File.read(filepath))
   end
   #yaml_config has been loaded.  Configure options.
