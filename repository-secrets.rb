@@ -23,7 +23,7 @@ require 'pp'
 require 'fileutils'
 
 #The version of this program
-Version = [0, 1, 0]
+Version = "0.1.1 SNAPSHOT"
 
 ################################################################################
 # Classes
@@ -40,12 +40,15 @@ class OptparseExample
     # The options specified on the command line will be collected in *options*.
     # We set default values here.
     options = Hash.new
-    options["private_key_file"] = "secrets/id_rsa"
-    options["public_key_file"] = "secrets/id_rsa.pub"
-    options["secret_text_tag"] = "supersecret"
-    options["verbose"] = 0
+    options["bits"] = 2048
+    options["config"] = "/etc/repository-secrets.yml"
     options["decrypt"] = false
     options["files"] = []
+    options["private_key_file"] = "secrets/id_rsa"
+    options["public_key_file"] = "secrets/id_rsa.pub"
+    options["secrets_directory"] = "/etc/repository-secrets/"
+    options["secret_text_tag"] = "supersecret"
+    options["verbose"] = 0
     opt_parser = OptionParser.new do |opts|
       opts.banner = "Usage: repository-secrets.rb [options] [arguments]"
 
@@ -55,7 +58,9 @@ class OptparseExample
       opts.separator ""
       opts.separator "There are two modes: Encrypt and Decrypt.  Encrypt mode is on by default."
 
-      #Encrypt mode options
+      #
+      #ENCRYPT MODE OPTIONS
+      #
       opts.separator ""
       opts.separator "Encryption options:"
       opts.separator "       Each argument that is passed without being associated with options, will"
@@ -67,26 +72,31 @@ class OptparseExample
       opts.separator "       encrypted."
       opts.separator ""
 
-      opts.on("--public-key FILE",
-              "Path to a public key to use for encryption.") do |file|
+      opts.on("","--public-key FILE",
+              "Path to a public key to use for encryption.",
+              "This gets overridden if --fingerprint",
+              "option is used.") do |file|
         options["public_key_file"] = file
       end
 
-      #Decrypt mode options
+      #
+      #DECRYPT MODE OPTIONS
+      #
       opts.separator ""
       opts.separator "Decryption options:"
       opts.separator "       Using any of these options will turn on Decrypt mode."
       opts.separator ""
 
-      opts.on_tail("-d", "--decrypt",
-                   "Force Decrypt mode to be on.  Not really",
-                   "necessary.") do
+      opts.on("", "--decrypt",
+              "Force Decrypt mode to be on.  Not really",
+              "necessary.") do
         options["decrypt"] = true
       end
 
-      opts.on("--private-key FILE",
+      opts.on("","--private-key FILE",
               "Path to a private key to use for",
-              "decryption.") do |file|
+              "decryption.  This gets overridden if",
+              " --fingerprint option is used.") do |file|
         options["private_key_file"] = file
         options["decrypt"] = true
       end
@@ -124,15 +134,63 @@ class OptparseExample
         options["decrypt"] = true
       end
 
+      #
+      #OPTIONS COMMON TO BOTH ENCRYPT AND DECRYPT MODES
+      #
       opts.separator ""
       opts.separator "Common options:"
       opts.separator "       These options are common to both Encrypt and Decrypt modes."
       opts.separator ""
 
+      # Optional argument; multi-line description.
+      opts.on("-p", "--fingerprint [FINGERPRINT]",
+              "Turn on fingerprint mode.  Optionally",
+              "specify which fingerprinted key to use for",
+              "encryption.  Decryption would automatically",
+              "use the fingerprint attached to the secret.") do |fingerprint|
+        options["fingerprint"] = fingerprint
+        if not options["fingerprint"]
+          options["fingerprint"] = true
+        end
+      end
+
+      opts.on("-d", "--secrets-directory DIR",
+              "The directory to look for fingerprinted",
+              "keys.  Generated key pairs will be placed",
+              "here.",
+              "Default: /etc/repository-secrets/") do |dir|
+        #force trailing slash
+        if (dir.length > 0) and not (dir[-1] == '/')
+          dir += '/'
+        end
+        options["secrets_directory"] = dir
+      end
+
+      opts.on("-c", "--config FILE",
+              "Config file to override options.  If config",
+              "file doesn't exist then will check current",
+              "working directory for",
+              "repository-secrets.yml.",
+              "Default: /etc/repository-secrets.yml") do |file|
+        options["config"] = file
+      end
+
+      opts.on("-g", "--generate-key-pair",
+              "Generate a fingerprinted key key pair in",
+              "secrets_directory.") do
+        options["generate_key_pair"] = true
+      end
+
+      opts.on("-b", "--bits BITS",
+              "The number of bits that will be used in",
+              "the generated key pair.  Default: 2048") do |bits|
+        options["bits"] = bits.to_i
+      end
+
       opts.on("--secret-text-tag TAG",
               "Change the unique text which defines the",
               "tag to be interpolated in files.  By",
-              "default: supersecret") do |tag|
+              "Default: supersecret") do |tag|
         options["secret_text_tag"] = tag
       end
 
@@ -154,7 +212,7 @@ class OptparseExample
 
       # Another typical switch to print the version.
       opts.on_tail("--version", "Show version") do
-        puts ::Version.join('.')
+        puts ::Version
         exit
       end
     end
