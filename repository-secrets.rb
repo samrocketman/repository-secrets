@@ -400,12 +400,25 @@ if (ARGV.length > 0) || $options["decrypt"]
     $options["files"].each do |file|
       verbose 0, "Performing string interpolation on: #{file}"
       filecontents = File.read(file)
-      secrets = filecontents.scan(/\${#{Regexp.escape($options["secret_text_tag"])}:[^}]*}/)
+      if $options["fingerprint"]
+        secrets = filecontents.scan(/\${#{Regexp.escape($options["secret_text_tag"])}_[0-9a-f]{8}:[^}]*}/)
+      else
+        secrets = filecontents.scan(/\${#{Regexp.escape($options["secret_text_tag"])}:[^}]*}/)
+      end
       secrets.each do |secret|
         #extract just the cipher text from the secret
-        ciphertext=secret.gsub(/\${#{Regexp.escape($options["secret_text_tag"])}:([^}]*)}/,'\1')
-        #inline string replace the secret with the plain text
-        filecontents.gsub!(secret,decrypt(ciphertext))
+        if $options["fingerprint"]
+          fingerprint = secret.gsub(/\${#{Regexp.escape($options["secret_text_tag"])}_([0-9a-f]{8}):[^}]*}/,'\1')
+          ciphertext = secret.gsub(/\${#{Regexp.escape($options["secret_text_tag"])}_[0-9a-f]{8}:([^}]*)}/,'\1')
+          verbose 3, "fingerprint = #{fingerprint}"
+          verbose 3, "ciphertext = #{ciphertext}"
+          #inline string replace the secret with the plain text
+          filecontents.gsub!(secret, decrypt($options["secrets_directory"] + fingerprint, ciphertext))
+        else
+          ciphertext = secret.gsub(/\${#{Regexp.escape($options["secret_text_tag"])}:([^}]*)}/,'\1')
+          #inline string replace the secret with the plain text
+          filecontents.gsub!(secret, decrypt($options["private_key_file"], ciphertext))
+        end
       end
       if $options["inplace"]
         if $options["extension"]
