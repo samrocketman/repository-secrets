@@ -90,8 +90,8 @@ class OptparseExample
       opts.separator ""
 
       opts.on("", "--decrypt",
-              "Force Decrypt mode to be on.  Not really",
-              "necessary.") do
+              "Force decrypt mode to be on.  Force mode to",
+              "be on or off in the repository-secrets.yml.") do
         options["decrypt"] = true
       end
 
