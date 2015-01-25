@@ -504,4 +504,8 @@ if not $options["decrypt"]
 end
 
 #CHANGELOG
+#0.1.1 - Jan 25, 2015
+  #New feature: key rotation supported through --fingerprint option.
+  #New options: --config, --fingerprint, --secrets-directory, --generate-key-pair, --bits
+  #Fixed bug: --decrypt documentation was not properly showing up in Decrypt mode section.  It now does.
 #0.1.0 - initial release
