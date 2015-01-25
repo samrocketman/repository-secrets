@@ -23,7 +23,7 @@ require 'pp'
 require 'fileutils'
 
 #The version of this program
-Version = "0.1.1 SNAPSHOT"
+Version = "0.1.1-SNAPSHOT"
 
 ################################################################################
 # Classes
@@ -185,6 +185,10 @@ class OptparseExample
               "The number of bits that will be used in",
               "the generated key pair.  Default: 2048") do |bits|
         options["bits"] = bits.to_i
+        if options["bits"] < 1024
+          $stderr.puts "WARNING: --bits less than 1024 is insecure.  Setting to 1024."
+          options["bits"] = 1024
+        end
       end
 
       opts.on("--secret-text-tag TAG",
@@ -297,6 +301,10 @@ verbose 2, "Arguments data structures (parsed and passed)"
 verbose 2, PP.pp($options, "")
 verbose 2, PP.pp(ARGV, "")
 
+#LOAD THE CONFIG FILE FOR OVERRIDES
+
+
+#DO ENCRYPTION OR DECRYPTION
 if (ARGV.length > 0) || $options["decrypt"]
   if $options["decrypt"]
     verbose 0, "Performing decryption with string interpolation on files."
