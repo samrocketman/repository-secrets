@@ -25,7 +25,7 @@ require 'fileutils'
 require 'yaml'
 
 #The version of this program
-Version = "repository-secrets.rb v0.2.1"
+Version = "repository-secrets.rb v0.2.2-SNAPSHOT"
 
 ################################################################################
 # Classes
@@ -50,6 +50,7 @@ class OptparseExample
     options["public_key"] = "secrets/id_rsa.pub"
     options["secrets_directory"] = "/etc/repository-secrets/"
     options["secret_text_tag"] = "supersecret"
+    options["secret_tag"] = "${ }"
     options["verbose"] = 0
     opt_parser = OptionParser.new do |opts|
       opts.banner = "Usage: repository-secrets.rb [options] [arguments]"
@@ -202,6 +203,23 @@ class OptparseExample
               "tag to be interpolated in files.",
               "Default: supersecret") do |tag|
         options["secret_text_tag"] = tag
+      end
+
+      opts.on("--secret-tag TAG",
+              "Change the unique text which defines the",
+              "tag to be interpolated in files.  The",
+              "outer edges of the ciphertext tag.",
+              "Do not use any characters that exist in the",
+              "Base64 character set.  String interpolation",
+              "will fail otherwise.",
+              "Default: \"${ }\"") do |tag|
+        temp = tag.split()
+        if temp.length == 2 and temp[0].length == 2 and temp[1].length == 1
+          options["secret_tag"] = tag
+        else
+          $stderr.puts "ERROR: --secret-tag \"#{tag}\" is a bad format."
+          exit 1
+        end
       end
 
       opts.on("-v", "--[no-]verbose",
@@ -363,6 +381,14 @@ def load_yaml(filepath)
         yaml_config["bits"] = 1024
       end
     end
+    #--secret-tag
+    if yaml_config.has_key?("secret_tag")
+      temp = yaml_config["secret_tag"].split()
+      if not (temp.length == 2 and temp[0].length == 2 and temp[1].length == 1)
+        verbose 0, "ERROR: secret_tag: \"#{yaml_config["secret_tag"]}\" (from #{filepath}) is a bad format."
+        exit 1
+      end
+    end
     #--verbose
     if yaml_config.has_key?("verbose")
       yaml_config["verbose"] = yaml_config["verbose"].to_i
@@ -403,6 +429,9 @@ if $options["fingerprint"] and ($options["fingerprint"].length > 0)
   $options["public_key"] = $options["secrets_directory"] + $options["fingerprint"] + ".pub"
 end
 
+#set the secret_tag
+$options["secret_tag"] = $options["secret_tag"].split()
+
 #print out the structures
 verbose 2, "$options data structure after merging config file."
 verbose 2, PP.pp($options, "")
@@ -439,21 +468,21 @@ if (ARGV.length > 0) || $options["decrypt"]
       verbose 0, "Performing string interpolation on: #{file}"
       filecontents = File.read(file)
       if $options["fingerprint"]
-        secrets = filecontents.scan(/\${#{Regexp.escape($options["secret_text_tag"])}_[0-9a-f]{8}:[^}]*}/)
+        secrets = filecontents.scan(/#{Regexp.escape($options["secret_tag"][0]) + Regexp.escape($options["secret_text_tag"])}_[0-9a-f]{8}:[^#{Regexp.escape($options["secret_tag"][1])}]*#{Regexp.escape($options["secret_tag"][1])}/)
       else
-        secrets = filecontents.scan(/\${#{Regexp.escape($options["secret_text_tag"])}:[^}]*}/)
+        secrets = filecontents.scan(/#{Regexp.escape($options["secret_tag"][0]) + Regexp.escape($options["secret_text_tag"])}:[^#{Regexp.escape($options["secret_tag"][1])}]*#{Regexp.escape($options["secret_tag"][1])}/)
       end
       secrets.each do |secret|
         #extract just the cipher text from the secret
         if $options["fingerprint"]
-          fingerprint = secret.gsub(/\${#{Regexp.escape($options["secret_text_tag"])}_([0-9a-f]{8}):[^}]*}/,'\1')
-          ciphertext = secret.gsub(/\${#{Regexp.escape($options["secret_text_tag"])}_[0-9a-f]{8}:([^}]*)}/,'\1')
+          fingerprint = secret.gsub(/#{Regexp.escape($options["secret_tag"][0]) + Regexp.escape($options["secret_text_tag"])}_([0-9a-f]{8}):[^#{Regexp.escape($options["secret_tag"][1])}]*#{Regexp.escape($options["secret_tag"][1])}/,'\1')
+          ciphertext = secret.gsub(/#{Regexp.escape($options["secret_tag"][0]) + Regexp.escape($options["secret_text_tag"])}_[0-9a-f]{8}:([^#{Regexp.escape($options["secret_tag"][1])}]*)#{Regexp.escape($options["secret_tag"][1])}/,'\1')
           verbose 3, "fingerprint = #{fingerprint}"
           verbose 3, "ciphertext = #{ciphertext}"
           #inline string replace the secret with the plain text
           filecontents.gsub!(secret, decrypt($options["secrets_directory"] + fingerprint, ciphertext))
         else
-          ciphertext = secret.gsub(/\${#{Regexp.escape($options["secret_text_tag"])}:([^}]*)}/,'\1')
+          ciphertext = secret.gsub(/#{Regexp.escape($options["secret_tag"][0]) + Regexp.escape($options["secret_text_tag"])}:([^#{Regexp.escape($options["secret_tag"][1])}]*)#{Regexp.escape($options["secret_tag"][1])}/,'\1')
           #inline string replace the secret with the plain text
           filecontents.gsub!(secret, decrypt($options["private_key"], ciphertext))
         end
@@ -474,9 +503,9 @@ if (ARGV.length > 0) || $options["decrypt"]
   else
     ARGV.each do |plaintext|
       if $options["fingerprint"]
-        puts "${#{$options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key"], plaintext.strip)}}"
+        puts "#{$options["secret_tag"][0] + $options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key"], plaintext.strip) + $options["secret_tag"][1]}"
       else
-        puts "${#{$options["secret_text_tag"]}:#{encrypt($options["public_key"], plaintext.strip)}}"
+        puts "#{$options["secret_tag"][0] + $options["secret_text_tag"]}:#{encrypt($options["public_key"], plaintext.strip) + $options["secret_tag"][1]}"
       end
     end
   end
@@ -489,9 +518,9 @@ else
     end
     next if plaintext.strip.length == 0
     if $options["fingerprint"]
-      puts "${#{$options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key"], plaintext.strip)}}"
+      puts "#{$options["secret_tag"][0] + $options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key"], plaintext.strip) + $options["secret_tag"][1]}"
     else
-      puts "${#{$options["secret_text_tag"]}:#{encrypt($options["public_key"], plaintext.strip)}}"
+      puts "#{$options["secret_tag"][0] + $options["secret_text_tag"]}:#{encrypt($options["public_key"], plaintext.strip) + $options["secret_tag"][1]}"
     end
   end
 end
