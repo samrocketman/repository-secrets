@@ -46,8 +46,8 @@ class OptparseExample
     options["config"] = "/etc/repository-secrets.yml"
     options["decrypt"] = false
     options["files"] = []
-    options["private_key_file"] = "secrets/id_rsa"
-    options["public_key_file"] = "secrets/id_rsa.pub"
+    options["private_key"] = "secrets/id_rsa"
+    options["public_key"] = "secrets/id_rsa.pub"
     options["secrets_directory"] = "/etc/repository-secrets/"
     options["secret_text_tag"] = "supersecret"
     options["verbose"] = 0
@@ -78,7 +78,7 @@ class OptparseExample
               "Path to a public key to use for encryption.",
               "This gets overridden if --fingerprint",
               "option is used.") do |file|
-        options["public_key_file"] = file
+        options["public_key"] = file
       end
 
       #
@@ -99,7 +99,7 @@ class OptparseExample
               "Path to a private key to use for",
               "decryption.  This gets overridden if",
               " --fingerprint option is used.") do |file|
-        options["private_key_file"] = file
+        options["private_key"] = file
         options["decrypt"] = true
       end
 
@@ -297,30 +297,43 @@ end
 def load_yaml(filepath)
   verbose 3, "load_yaml(\"#{filepath}\")"
   yaml_config = YAML.load(File.read(filepath))
+  #--config
   if yaml_config and yaml_config.has_key?("config")
     filepath = yaml_config["config"]
     yaml_config = YAML.load(File.read(filepath))
   end
+  #yaml_config has been loaded.  Configure options.
   if yaml_config
-    if yaml_config.has_key?("generate_key_pair")
-      verbose 0, "ERROR: generate_key_pair not allowed in config file: #{filepath}"
-      exit 1
+    #set decrypt mode only if decrypt option is not in the config file
+    if not yaml_config.has_key?("decrypt") and (\
+       yaml_config.has_key?("private_key") or \
+       yaml_config.has_key?("secrets_file") or \
+       yaml_config.has_key?("inplace") or \
+       yaml_config.has_key?("file")\
+       )
+      #end of long conditionals
+      yaml_config["decrypt"] = true
     end
-    if yaml_config.has_key?("verbose")
-      yaml_config["verbose"] = yaml_config["verbose"].to_i
+    #--file
+    if yaml_config.has_key?("file")
+      yaml_config["files"] = [yaml_config["file"]]
     end
-    if yaml_config.has_key?("bits")
-      yaml_config["bits"] = yaml_config["bits"].to_i
-      if yaml_config["bits"] < 1024
-        verbose 0, "WARNING: bits (from #{filepath}) less than 1024 is insecure.  Setting to 1024."
-        yaml_config["bits"] = 1024
+    #--inplace
+    if yaml_config.has_key?("inplace")
+      yaml_config["inplace"] = yaml_config["inplace"].to_s
+      if yaml_config["inplace"] == "true" or yaml_config["inplace"].length == 0
+        yaml_config["inplace"] = true
+        yaml_config["extension"] = nil
+      elsif yaml_config["inplace"] == "false"
+        yaml_config["inplace"] = false
+        yaml_config["extension"] = nil
+      else
+        yaml_config["extension"] = yaml_config["inplace"]
+        yaml_config["inplace"] = true
+        yaml_config["extension"].sub!(/\A\.?(?=.)/, ".")  # Ensure extension begins with dot.
       end
     end
-    if yaml_config.has_key?("secrets_directory")
-      if (yaml_config["secrets_directory"].length > 0) and not (yaml_config["secrets_directory"][-1] == '/')
-        yaml_config["secrets_directory"] += '/'
-      end
-    end
+    #--fingerprint
     if yaml_config.has_key?("fingerprint")
       yaml_config["fingerprint"] = yaml_config["fingerprint"].to_s
       if yaml_config["fingerprint"] == "true"
@@ -328,6 +341,29 @@ def load_yaml(filepath)
       elsif yaml_config["fingerprint"] == "false"
         yaml_config["fingerprint"] = nil
       end
+    end
+    #--secrets-directory
+    if yaml_config.has_key?("secrets_directory")
+      if (yaml_config["secrets_directory"].length > 0) and not (yaml_config["secrets_directory"][-1] == '/')
+        yaml_config["secrets_directory"] += '/'
+      end
+    end
+    #--generate-key-pair
+    if yaml_config.has_key?("generate_key_pair")
+      verbose 0, "ERROR: generate_key_pair not allowed in config file: #{filepath}"
+      exit 1
+    end
+    #--bits
+    if yaml_config.has_key?("bits")
+      yaml_config["bits"] = yaml_config["bits"].to_i
+      if yaml_config["bits"] < 1024
+        verbose 0, "WARNING: bits (from #{filepath}) less than 1024 is insecure.  Setting to 1024."
+        yaml_config["bits"] = 1024
+      end
+    end
+    #--verbose
+    if yaml_config.has_key?("verbose")
+      yaml_config["verbose"] = yaml_config["verbose"].to_i
     end
   end
   if not yaml_config
@@ -361,8 +397,8 @@ $options.merge!(yaml_config)
 
 #set the private and public keys if fingerprint used
 if $options["fingerprint"] and ($options["fingerprint"].length > 0)
-  $options["private_key_file"] = $options["secrets_directory"] + $options["fingerprint"]
-  $options["public_key_file"] = $options["secrets_directory"] + $options["fingerprint"] + ".pub"
+  $options["private_key"] = $options["secrets_directory"] + $options["fingerprint"]
+  $options["public_key"] = $options["secrets_directory"] + $options["fingerprint"] + ".pub"
 end
 
 #print out the structures
@@ -417,7 +453,7 @@ if (ARGV.length > 0) || $options["decrypt"]
         else
           ciphertext = secret.gsub(/\${#{Regexp.escape($options["secret_text_tag"])}:([^}]*)}/,'\1')
           #inline string replace the secret with the plain text
-          filecontents.gsub!(secret, decrypt($options["private_key_file"], ciphertext))
+          filecontents.gsub!(secret, decrypt($options["private_key"], ciphertext))
         end
       end
       if $options["inplace"]
@@ -436,9 +472,9 @@ if (ARGV.length > 0) || $options["decrypt"]
   else
     ARGV.each do |plaintext|
       if $options["fingerprint"]
-        puts "${#{$options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key_file"], plaintext.strip)}}"
+        puts "${#{$options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key"], plaintext.strip)}}"
       else
-        puts "${#{$options["secret_text_tag"]}:#{encrypt($options["public_key_file"], plaintext.strip)}}"
+        puts "${#{$options["secret_text_tag"]}:#{encrypt($options["public_key"], plaintext.strip)}}"
       end
     end
   end
@@ -451,9 +487,9 @@ else
     end
     next if plaintext.strip.length == 0
     if $options["fingerprint"]
-      puts "${#{$options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key_file"], plaintext.strip)}}"
+      puts "${#{$options["secret_text_tag"]}_#{$options["fingerprint"]}:#{encrypt($options["public_key"], plaintext.strip)}}"
     else
-      puts "${#{$options["secret_text_tag"]}:#{encrypt($options["public_key_file"], plaintext.strip)}}"
+      puts "${#{$options["secret_text_tag"]}:#{encrypt($options["public_key"], plaintext.strip)}}"
     end
   end
 end
