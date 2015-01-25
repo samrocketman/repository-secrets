@@ -6,173 +6,28 @@ The idea is you encrypt secrets with a public key that can be widely
 distributed.  Then on a CI system or within a delivery pipeline you decrypt
 those secrets with a private key.
 
-* [Drawbacks and alternative for files](#drawbacks-and-alternative-for-files)
-* [A possible solution](#a-possible-solution)
-  * [Asymmetric encryption](#asymmetric-encryption) (for strings)
-  * [Asymmetric encrypting a symmetric session
-    key](#asymmetric-encrypting-a-symmetric-session-key) (for files)
-* [Supporting inline secrets](#supporting-inline-secrets) (for strings in files)
+* [Proof of concept](docs/proof_of_concept.md)
 * [repository-secrets cli utility](#repository-secrets-cli-utility) (a user
   friendly utility)
-  * [Examples](#examples)
-
-# Drawbacks and alternative for files
-
-This uses asymmetric encryption (e.g. RSA key pair) which is best used on
-small strings.  However, for large files this method is very inefficient.  It is
-more efficient to use symmetric encryption (e.g. AES256) on large files.  One
-way to go about it is to use a session key for the symmetric encryption and
-then encrypt the session key using asymmetric encryption.
-
-Another drawback to consider, build artifacts will have the decrypted
-secrets.  There's not much that can be done about that because at some point in
-the lifecycle of the code it needs to be decrypted to be used in production.
-This mainly discusses decrypting secrets as part of the build process.
-Therefore, it is also the intention that the repository may be public but the
-build artifacts are behind a secure gateway requiring some form of
-authorization.  This can be somewhat mitigated by developer best practices
-and how the project is designed (both in source and architecture).
-
-# A possible solution
-
-For encrypting strings using asymmetric encryption, I am selecting RSA public
-key encryption and using `openssl` tools.
-
-For large files, rather than re-invent the wheel GPG does a great job at
-encrypting session keys with asymmetric encryption and then
-encrypting/decrypting files with symmetric encryption.  Also, by using GPG
-there is a certain flexibility of being able to encrypt files for the CI system
-or delivery pipeline but still allow a developer to easily decrypt the files as
-well.  This is because files can be encrypted with multiple GPG keys able to
-decrypt the same file.
-
-## Asymmetric encryption
-
-### Setting up key pair
-
-Generate an RSA private and public key pair.
-
-    openssl genrsa -out /tmp/id_rsa 1024
-    openssl rsa -in /tmp/id_rsa -pubout -outform pem -out /tmp/id_rsa.pub
-
-### Encrypting
-
-Encrypt a plaintext string to be stored in a repository.  This encrypts using
-the public key.
-
-    echo -n 'plaintext' | openssl rsautl -encrypt -inkey secrets/id_rsa.pub -pubin | base64 -w0
-
-### Decrypting
-
-Decrypt a ciphertext string to be used by the CI system or delivery pipeline.
-This decrypts using the private key.
-
-    echo 'ciphertext' | base64 -d | openssl rsautl -decrypt -inkey secrets/id_rsa
-
-## Asymmetric encrypting a symmetric session key
-
-### Setting up GPG
-
-Generate a GPG key for your build system.  There is helpful documentation on
-completing the wizard prompts over at the [Fedora project wiki][fedora-wiki].
-
-    gpg --gen-key
-
-List your newly generated key so that you may get the Key ID.
-
-    gpg --list-keys
-
-Remove the password for the newly generated key (use the `passwd` command in the
-`gpg>` prompt).  It is necessary to remove the password of the GPG key because
-it is intended for automation.  There would be no human there to type in a
-password during automated workflows unless you use something like the `expect`
-command.
-
-    gpg --edit-key <KEY ID>
-    gpg> passwd
-    gpg> save
-
-When changing the password leave the password field blank.  You will be asked to
-confirm if you *really* want to take away the password (you do).  `gpg> save`
-will save your changes and exit GPG.
-
-Create a backup of your key which is ASCII armored.  In the following replace
-`<KEY ID>` with your GPG key id.  *Note: for wide distribution only the public
-key needs exporting (the first command).*
-
-    gpg --export -a <KEY ID> > gpg_example_pub-sec.asc
-    gpg --export-secret-keys -a <KEY ID> >> gpg_example_pub-sec.asc
-
-From now on any GPG examples will be using the `secrets/gpg_example_pub-sec.asc`
-key which has a key id of `DAB5AED9`.
-
-### Encrypting
-
-Before running any examples for GPG you might want to import the example GPG
-key.
-
-    gpg --import secrets/gpg_example_pub-sec.asc
-
-Encrypt a single file to a single recipient.  In this case, use the example GPG
-key to encrypt this README.  If you get a warning when encrypting its because of
-the trust level of the recipient; ignore it because this is just an example.
-
-    gpg  -e --recipient DAB5AED9 -- "README.md"
-
-To add multiple recipients (like developers in addition to the CI system).
-
-    gpg  -e --recipient DAB5AED9 --recipient <ANOTHER KEY ID> -- "README.md"
-
-### Decrypting
-
-Decrypt a file and have its contents output to `stdout`.
-
-    gpg -d -- README.md.gpg | less
-
-Decrypt a file and have it remove the extension and automatically output to the
-same file name.
-
-    echo "README.md.gpg" | gpg --multifile --decrypt --
-
-Now that you're probably done with these examples go ahead and delete the
-example key from your key chain.
-
-    gpg --delete-secret-keys DAB5AED9
-    gpg --delete-key DAB5AED9
-
-# Supporting inline secrets
-
-Inline secrets are just as important as encrypting strings or files.  Inline
-secrets are what make encrypting strings useful in a configuration that might
-need to only be partially secure.  An example of an inline secret would be
-embedding a unique string in a config file that can be substituted with the
-plain text equivalent of the secret string.  Another term for that is string
-interpolation.  For example, see [`myconfig.json`](examples/myconfig.json) which
-uses an inline secret, `${supersecret:ciphertext}`.  The inline secret can use
-string interpolation with something like a regular expression from `sed` (e.g.
-`${supersecret:[^}]*}`).
-
-When the string interpolation is done on `myconfig.json` it would have the
-plaintext contents of:
-
-```json
-{
-  "somesetting": "another setting",
-  "some_secure_setting": "super secret setting"
-}
-```
-
-Run a simple [ruby example](interpolate_example.rb) of string interpolation.
-
-```bash
-ruby interpolate_example.rb
-```
+  * [Command Examples](#command-examples)
+  * [Config file examples](#config-file-examples)
 
 # repository-secrets cli utility
 
 [`repository-secrets.rb`](repository-secrets.rb) was meant for both ends of this
 equation.  It's meant to be used by developers to encrypt their secrets and by
 the build system to decrypt the secrets.  Here's the command line documentation.
+
+Features include:
+
+* Friendly interface for generating fingerprinted key pairs.
+* Friendly interface for developers to encrypt secrets.
+* Key rotation by fingerprinting keys and encrypted secrets (see `--fingerprint`
+  option).
+* Loading a config file to override options to keep the options of the utility
+  brief for both developers encrypting secrets and a build pipeline decrypting
+  secrets.
+
 
 ```
 Usage: repository-secrets.rb [options] [arguments]
@@ -191,13 +46,21 @@ Encryption options:
        If no arguments are passed in then stdin will be read for strings to be
        encrypted.
 
-        --public-key FILE            Path to a public key to use for encryption.
+        --public-key FILE
+                                     Path to a public key to use for encryption.
+                                     This gets overridden if --fingerprint
+                                     option is used.
 
 Decryption options:
        Using any of these options will turn on Decrypt mode.
 
-        --private-key FILE           Path to a private key to use for
-                                     decryption.
+        --decrypt
+                                     Force decrypt mode to be on.  Force mode to
+                                     be on or off in the repository-secrets.yml.
+        --private-key FILE
+                                     Path to a private key to use for
+                                     decryption.  This gets overridden if
+                                      --fingerprint option is used.
     -s, --secrets-file FILE          Path to a secrets FILE; the contents
                                      contain one file per line.  It will do
                                      string interpolation on each file in the
@@ -214,20 +77,38 @@ Decryption options:
 Common options:
        These options are common to both Encrypt and Decrypt modes.
 
+    -c, --config FILE                Config file to override options.  If config
+                                     file doesn't exist then will check current
+                                     working directory for
+                                     repository-secrets.yml.  The format is YAML
+                                     and any long option with hyphens replaced
+                                     with underscores can be used.  For example,
+                                      --secrets-directory would be
+                                     secrets_directory in the config file.
+                                     Default: /etc/repository-secrets.yml
+    -p, --fingerprint [FINGERPRINT]  Turn on fingerprint mode.  Optionally
+                                     specify which fingerprinted key to use for
+                                     encryption.  Decryption would automatically
+                                     use the fingerprint attached to the secret.
+    -d, --secrets-directory DIR      The directory to look for fingerprinted
+                                     keys.  Generated key pairs will be placed
+                                     here.
+                                     Default: /etc/repository-secrets/
+    -g, --generate-key-pair          Generate a fingerprinted key key pair in
+                                     secrets_directory.
+    -b, --bits BITS                  The number of bits that will be used in
+                                     the generated key pair.  Default: 2048
         --secret-text-tag TAG        Change the unique text which defines the
-                                     tag to be interpolated in files.  By
-                                     default: supersecret
+                                     tag to be interpolated in files.
+                                     Default: supersecret
     -v, --[no-]verbose               Run more verbosely.
                                        (more verbosity with -vv or -vvv)
                                        WARNING: -vvv displays plain text secrets
-    -d, --decrypt                    Force Decrypt mode to be on.  Not really
-                                     necessary.
     -h, --help                       Show this message
         --version                    Show version
-
 ```
 
-## Examples
+## Command Examples
 
 Enter interactive mode to generate secrets (from a user perspective).
 
@@ -245,4 +126,36 @@ Same example but creating a backup of the files being decrypted.
 
     ./repository-secrets.rb -s ./.supersecrets -i.bak
 
-[fedora-wiki]: https://fedoraproject.org/wiki/Creating_GPG_Keys#Creating_GPG_Keys_Using_the_Command_Line
+## Config file examples
+
+Default options for the command line utility can be set in
+`/etc/repository-secrets.yml`.  This path can be overridden with the `--config`
+option.
+
+YAML file with increased verbosity, forcing decrypt mode off, and specifying a
+fingerprinted key to use.  *Hint: Increment `--verbose` with each `-v` option.*
+
+```yaml
+verbose: 2
+decrypt: false
+fingerprint: "0ae32bc1"
+```
+
+YAML file force decrypt mode on, enable fingerprinted decryption, and do inplace
+editing.
+
+```yaml
+decrypt: true
+fingerprint: true
+inplace: true
+```
+
+Same as previous example but create a backup from the inplace editing and
+customize the `--secret-text-tag`.
+
+```yaml
+decrypt: true
+fingerprint: true
+secret_text_tag: "encrypted"
+inplace: ".bak"
+```
