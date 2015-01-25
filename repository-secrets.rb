@@ -144,6 +144,19 @@ class OptparseExample
       opts.separator "       These options are common to both Encrypt and Decrypt modes."
       opts.separator ""
 
+      opts.on("-c", "--config FILE",
+              "Config file to override options.  If config",
+              "file doesn't exist then will check current",
+              "working directory for",
+              "repository-secrets.yml.  The format is YAML",
+              "and any long option with hyphens replaced",
+              "with underscores can be used.  For example,",
+              " --secrets-directory would be",
+              "secrets_directory in the config file.",
+              "Default: /etc/repository-secrets.yml") do |file|
+        options["config"] = file
+      end
+
       # Optional argument; multi-line description.
       opts.on("-p", "--fingerprint [FINGERPRINT]",
               "Turn on fingerprint mode.  Optionally",
@@ -168,15 +181,6 @@ class OptparseExample
         options["secrets_directory"] = dir
       end
 
-      opts.on("-c", "--config FILE",
-              "Config file to override options.  If config",
-              "file doesn't exist then will check current",
-              "working directory for",
-              "repository-secrets.yml.",
-              "Default: /etc/repository-secrets.yml") do |file|
-        options["config"] = file
-      end
-
       opts.on("-g", "--generate-key-pair",
               "Generate a fingerprinted key key pair in",
               "secrets_directory.") do
@@ -195,7 +199,7 @@ class OptparseExample
 
       opts.on("--secret-text-tag TAG",
               "Change the unique text which defines the",
-              "tag to be interpolated in files.  By",
+              "tag to be interpolated in files.",
               "Default: supersecret") do |tag|
         options["secret_text_tag"] = tag
       end
