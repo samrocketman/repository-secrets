@@ -144,10 +144,10 @@ secrets are what make encrypting strings useful in a configuration that might
 need to only be partially secure.  An example of an inline secret would be
 embedding a unique string in a config file that can be substituted with the
 plain text equivalent of the secret string.  Another term for that is string
-interpolation.  For example, see [`myconfig.json`](examples/myconfig.json) which
-uses an inline secret, `${supersecret:ciphertext}`.  The inline secret can use
-string interpolation with something like a regular expression from `sed` (e.g.
-`${supersecret:[^}]*}`).
+interpolation.  For example, see [`myconfig.json`](../examples/myconfig.json)
+which uses an inline secret, `${supersecret:ciphertext}`.  The inline secret can
+use string interpolation with something like a regular expression from `sed`
+(e.g. `${supersecret:[^}]*}`).
 
 When the string interpolation is done on `myconfig.json` it would have the
 plaintext contents of:
@@ -159,7 +159,7 @@ plaintext contents of:
 }
 ```
 
-Run a simple [ruby example](interpolate_example.rb) of string interpolation.
+Run a simple [ruby example](../interpolate_example.rb) of string interpolation.
 
 ```bash
 ruby interpolate_example.rb
