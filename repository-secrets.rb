@@ -25,7 +25,7 @@ require 'fileutils'
 require 'yaml'
 
 #The version of this program
-Version = "repository-secrets.rb v0.2.0"
+Version = "repository-secrets.rb v0.2.1"
 
 ################################################################################
 # Classes
@@ -506,6 +506,10 @@ if not $options["decrypt"]
 end
 
 #CHANGELOG
+#0.2.1 - Jan 25, 2015
+  #Fix documentation links
+  #Add logging when loading config files.
+  #Updated README
 #0.2.0 - Jan 25, 2015
   #New feature: key rotation supported through --fingerprint option.
   #New options: --config, --fingerprint, --secrets-directory, --generate-key-pair, --bits
