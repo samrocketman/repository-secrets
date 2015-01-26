@@ -9,7 +9,7 @@ those secrets with a private key.
 * [Proof of concept](docs/proof_of_concept.md)
 * [repository-secrets cli utility](#repository-secrets-cli-utility) (a user
   friendly utility)
-  * [Command Examples](#command-examples)
+  * [Command examples](#command-examples)
   * [Config file examples](#config-file-examples)
 
 # repository-secrets cli utility
@@ -108,7 +108,7 @@ Common options:
         --version                    Show version
 ```
 
-## Command Examples
+## Command examples
 
 Enter interactive mode to generate secrets (from a user perspective).
 
