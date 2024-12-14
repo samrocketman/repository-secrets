@@ -6,156 +6,164 @@ The idea is you encrypt secrets with a public key that can be widely
 distributed.  Then on a CI system or within a delivery pipeline you decrypt
 those secrets with a private key.
 
-* [Proof of concept](docs/proof_of_concept.md)
-* [repository-secrets cli utility](#repository-secrets-cli-utility) (a user
-  friendly utility)
-  * [Command examples](#command-examples)
-  * [Config file examples](#config-file-examples)
+* [Old Proof of concept](docs/proof_of_concept.md)
+* [2024 proof of concept](docs/2024_proof_of_concept.md)
 
-# repository-secrets cli utility
+# repository-secrets.sh CLI utility
 
-[`repository-secrets.rb`](repository-secrets.rb) was meant for both ends of this
-equation.  It's meant to be used by developers to encrypt their secrets and by
-the build system to decrypt the secrets.  Here's the command line documentation.
+### Example
 
-Features include:
+Generate a private and public key pair.
 
-* Friendly interface for generating fingerprinted key pairs.
-* Friendly interface for developers to encrypt secrets.
-* Key rotation by fingerprinting keys and encrypted secrets (see `--fingerprint`
-  option).
-* Loading a config file to override options to keep the options of the utility
-  brief for both developers encrypting secrets and a build pipeline decrypting
-  secrets.
+    openssl genrsa -out /tmp/id_rsa 4096
+    openssl rsa -in /tmp/id_rsa -pubout -outform pem -out /tmp/id_rsa.pub
 
+Encrypt some text
+
+    echo supersecret | ./repository-secrets.sh encrypt -o cipher.yaml
+
+### Help documentation
+
+`repository-secrets.sh` was written based on the 2024 proof of concept document.
+
+Help documentation: `./repository-secrets.sh help`
 
 ```
-Usage: repository-secrets.rb [options] [arguments]
+SYNOPSIS
+  ./repository-secrets.sh [sub_command] [options]
 
-This is a full featured command line utility for performing string interpolation
-on encrypted secrets in plain text files in a repository.
 
-There are two modes: Encrypt and Decrypt.  Encrypt mode is on by default.
+DESCRIPTION
+  A utility for performing one-way encryption or decryption on files using RSA
+  key pairs.  The intent is to have a client encrypt data with an RSA public
+  key and a backend system use this same script to decrypt the data with an RSA
+  private key.
 
-Encryption options:
-       Each argument that is passed without being associated with options, will
-       be interpreted as an argument.  Each argument will be encrypted as a
-       secure property.  Secure properties can be copied and pasted into a
-       source file as a secret.
 
-       If no arguments are passed in then stdin will be read for strings to be
-       encrypted.
+SUBCOMMANDS
+  encrypt
+      Performs encryption operations with an RSA public key and outputs an
+      encrypted YAML file.  Binary data is allowed.
 
-        --public-key FILE
-                                     Path to a public key to use for encryption.
-                                     This gets overridden if --fingerprint
-                                     option is used.
+  decrypt
+      Performs decryption operations with an RSA private key and outputs
+      original plain text.  May output binary data if binary data was
+      originally encrypted.
 
-Decryption options:
-       Using any of these options will turn on Decrypt mode.
+  rotate-key
+      Performs private key rotation on enciphered YAML without changing
+      symmetrically encrypted data.  This will not modify data or openssl_args
+      keys in the enciphered YAML.
 
-        --decrypt
-                                     Force decrypt mode to be on.  Force mode to
-                                     be on or off in the repository-secrets.yml.
-        --private-key FILE
-                                     Path to a private key to use for
-                                     decryption.  This gets overridden if
-                                      --fingerprint option is used.
-    -s, --secrets-file FILE          Path to a secrets FILE; the contents
-                                     contain one file per line.  It will do
-                                     string interpolation on each file in the
-                                     list replacing secrets with the decrypted
-                                     text.  File paths are either full path or
-                                     relative to the current working directory.
-    -f, --file FILE                  Use string interpolation on the specified
-                                     FILE to decrypt secrets.
-    -i, --inplace [EXTENSION]        Perform string interpolation on files with
-                                     in-place editing.  Otherwise print
-                                     decrypted file to stdout.
-                                       (make backup if EXTENSION supplied)
 
-Common options:
-       These options are common to both Encrypt and Decrypt modes.
+ENCRYPT SUBCOMMAND OPTIONS
+  -p FILE
+  --public-key FILE
+    An RSA public key which will be used for encrypting data.
+    Default: PUBLIC_KEY environment variable
 
-    -c, --config FILE                Config file to override options.  If config
-                                     file doesn't exist then will check current
-                                     working directory for
-                                     repository-secrets.yml.  The format is YAML
-                                     and any long option with hyphens replaced
-                                     with underscores can be used.  For example,
-                                      --secrets-directory would be
-                                     secrets_directory in the config file.
-                                     Default: /etc/repository-secrets.yml
-    -p, --fingerprint [FINGERPRINT]  Turn on fingerprint mode.  Optionally
-                                     specify which fingerprinted key to use for
-                                     encryption.  Decryption would automatically
-                                     use the fingerprint attached to the secret.
-    -d, --secrets-directory DIR      The directory to look for fingerprinted
-                                     keys.  Generated key pairs will be placed
-                                     here.
-                                     Default: /etc/repository-secrets/
-    -g, --generate-key-pair          Generate a fingerprinted key key pair in
-                                     secrets_directory.
-    -b, --bits BITS                  The number of bits that will be used in
-                                     the generated key pair.  Default: 2048
-        --secret-text-tag TAG        Change the unique text which defines the
-                                     tag to be interpolated in files.
-                                     Default: supersecret
-    -v, --[no-]verbose               Run more verbosely.
-                                       (more verbosity with -vv or -vvv)
-                                       WARNING: -vvv displays plain text secrets
-    -h, --help                       Show this message
-        --version                    Show version
-```
+  -i FILE
+  --in-file FILE
+    Plain input meant to be encrypted.  Can be plain text or binary data.
+    Default: stdin
 
-## Command examples
+  -o FILE
+  --output FILE
+    Encrypted ciphertext in a plain-text friendly YAML format.  If the output
+    file already exists as cipher YAML, then only the data and hash will be
+    updated.
+    Default: stdout
 
-Enter interactive mode to generate secrets (from a user perspective).
 
-    ./repository-secrets.rb
+DECRYPT SUBCOMMAND OPTIONS
+  -k FILE
+  --private-key FILE
+    An RSA private key which will be used for decrypting data.
+    Default: PRIVATE_KEY environment variable
 
-Decrypt secrets and output to `stdout`.
+  -i FILE
+  --in-file FILE
+    Encrypted ciphertext in a plain-text friendly YAML format.
+    Default: stdin
 
-    ./repository-secrets.rb -f examples/myconfig.json
+  -o FILE
+  --output FILE
+    Plain input meant to be which has been decrypted.
+    Default: stdout
 
-Decrypt secrets in a list of files and do inline replacement.
+ROTATE-KEY SUBCOMMAND OPTIONS
+  -k FILE
+  --private-key FILE
+    An RSA private key which will be used to decrypt keys salt, passin, and
+    hash within a cipher YAML file.
+    Default: PRIVATE_KEY environment variable
 
-    ./repository-secrets.rb -s ./.supersecrets -i
+  -p FILE
+  --public-key FILE
+    An RSA public key which will be used to re-encrypt keys salt, passin, and
+    hash within a cipher YAML file.
+    Default: PUBLIC_KEY environment variable
 
-Same example but creating a backup of the files being decrypted.
+  -f FILE
+  --input-output-file FILE
+    A cipher YAML file in which the salt, passin, and hash are updated with the
+    new private key.  The data will not be modified.
 
-    ./repository-secrets.rb -s ./.supersecrets -i.bak
 
-## Config file examples
+EXAMPLES
 
-Default options for the command line utility can be set in
-`/etc/repository-secrets.yml`.  This path can be overridden with the `--config`
-option.
+  Generate RSA key pair for examples.
 
-YAML file with increased verbosity, forcing decrypt mode off, and specifying a
-fingerprinted key to use.  *Hint: Increment `--verbose` with each `-v` option.*
+    openssl genrsa -out /tmp/id_rsa 4096
+    openssl rsa -in /tmp/id_rsa -pubout -outform pem -out /tmp/id_rsa.pub
 
-```yaml
-verbose: 2
-decrypt: false
-fingerprint: "0ae32bc1"
-```
+  Encrypt data
 
-YAML file force decrypt mode on, enable fingerprinted decryption, and do inplace
-editing.
+    echo plaintext | ./repository-secrets.sh encrypt -o /tmp/cipher.yaml
+    ./repository-secrets.sh decrypt -i output.yaml
 
-```yaml
-decrypt: true
-fingerprint: true
-inplace: true
-```
+  Working with binary data is the same.
 
-Same as previous example but create a backup from the inplace editing and
-customize the `--secret-text-tag`.
+    echo plaintext | gzip -9 | ./repository-secrets.sh encrypt -o /tmp/cipher.yaml
+    ./repository-secrets.sh decrypt -i /tmp/cipher.yaml | gunzip
 
-```yaml
-decrypt: true
-fingerprint: true
-secret_text_tag: "encrypted"
-inplace: ".bak"
+  Rotate private/public key pair.
+
+    ./repository-secrets.sh rotate-key -k old-private-key.pem -p new-public-key.pub -f /tmp/cipher.yaml
+
+  Alternate example.
+
+    export PRIVATE_KEY=old-private-key.pem
+    export PUBLIC_KEY=new-public-key.pub
+    ./repository-secrets.sh rotate-key -f /tmp/cipher.yaml
+
+
+OLD OPENSSL NOTICE
+
+  Old OpenSSL versions before OpenSSL 3.2 do not have -saltlen option
+  available.  You must set a few environment variables in order for
+  ./repository-secrets.sh to be compatible with older OpenSSL releases.
+
+    openssl_saltlen=8
+    openssl_args='-aes-256-cbc -pbkdf2 -iter 600000'
+    export openssl_saltlen openssl_args
+    echo plaintext | ./repository-secrets.sh encrypt -o /tmp/cipher.yaml
+
+  You can upgrade the encryption if migrating to OpenSSL 3.2 or later.  Note
+  the old and new file names must be different.  Also note that openssl_saltlen
+  and openssl_args environment variables are prefixed on the first command and
+  not exported to the second command.
+
+    openssl_saltlen=8 openssl_args='-aes-256-cbc -pbkdf2 -iter 600000' \
+      ./repository-secrets.sh decrypt -i cipher.yaml -k id_rsa | \
+      ./repository-secrets.sh encrypt -p id_rsa.pub -o new-cipher.yaml
+    mv new-cipher.yaml cipher.yaml
+
+
+ALGORITHMS
+
+  SHA-256 for data integrity verification.
+  RSA/ECB/PKCS1Padding for asymmetric encryption storage.
+  AES/CBC/PKCS5Padding for symmetric encryption storage.
+  PBKDF2WithHmacSHA256 for key derivation; 600k iterations with 16-byte salt.
 ```
