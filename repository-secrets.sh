@@ -241,17 +241,6 @@ process_arguments() {
         ;;
       *)
         if [ -z "${sub_command:-}" ]; then
-          if [ ! "${1:-}" = encrypt ] \
-            && [ ! "${1:-}" = decrypt ] \
-            && [ ! "${1:-}" = rotate-key ]; then
-            echo 'Must use one of the following subcommands.' >&2
-            echo '  - '"$0 encrypt [options]" >&2
-            echo '  - '"$0 decrypt [options]" >&2
-            echo '  - '"$0 rotate-key [options]" >&2
-            echo >&2
-            echo 'See also '"$0"' help.' >&2
-            exit 1
-          fi
           sub_command="$1"
           shift
         else
@@ -262,6 +251,19 @@ process_arguments() {
         fi
     esac
   done
+  case "${sub_command:-}" in
+    encrypt|decrypt|rotate-key)
+      ;;
+    *)
+      echo 'Must use one of the following subcommands.' >&2
+      echo '  - '"$0 encrypt [options]" >&2
+      echo '  - '"$0 decrypt [options]" >&2
+      echo '  - '"$0 rotate-key [options]" >&2
+      echo >&2
+      echo 'See also '"$0"' help.' >&2
+      exit 1
+      ;;
+  esac
 }
 
 validate_arguments() {
