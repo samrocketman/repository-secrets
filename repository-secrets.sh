@@ -273,11 +273,6 @@ validate_arguments() {
       echo 'RSA private key does not exist.' >&2
       result=1
     fi
-    if ! yq '. | keys' "$input_file" &> /dev/null; then
-      echo '-f FILE is expected to be YAML but it is not valid YAML.' >&2
-      echo 'Invalid yaml: '"'$input_file'" >&2
-      result=1
-    fi
   elif [ "$sub_command" = 'rotate-key' ]; then
     if [ ! -f "${PUBLIC_KEY:-}" ]; then
       echo 'RSA public key does not exist.' >&2
@@ -336,11 +331,11 @@ stdin_aes_decrypt() {
 }
 
 stdin_rsa_encrypt() {
-  openssl pkeyutl -encrypt -inkey "${PUBLIC_KEY}" -pubin | openssl enc -a
+  openssl pkeyutl -encrypt -inkey "${PUBLIC_KEY}" -pubin | openssl enc -base64
 }
 
 stdin_rsa_decrypt() {
-  openssl enc -d -a | openssl pkeyutl -decrypt -inkey "${PRIVATE_KEY}"
+  openssl enc -base64 -d | openssl pkeyutl -decrypt -inkey "${PRIVATE_KEY}"
 }
 
 data_or_file() {
@@ -355,7 +350,7 @@ stdin_shasum() {
   (
     if type -P shasum &> /dev/null; then
       shasum -a 256 "$@"
-    elif type -P sha256sum; then
+    elif type -P sha256sum &> /dev/null; then
       sha256sum "$@"
     else
       echo 'No sha256sum utility available' >&2
@@ -369,13 +364,9 @@ read_yaml_for_hash() {
 }
 
 validate_hash() {
-  local validate_file="${TMP_DIR}"/cipher_decrypt.yaml
-  if [ -n "${1:-}" ]; then
-    validate_file="$1"
-  fi
-  yq '.hash' "${validate_file}" \
+  yq '.hash' "$1" \
     | stdin_rsa_decrypt > "${TMP_DIR}"/hash
-  read_yaml_for_hash "${validate_file}" \
+  read_yaml_for_hash "$1" \
     | stdin_shasum -c "${TMP_DIR}"/hash
 }
 
@@ -430,7 +421,13 @@ EOF
 
 decrypt_file() {
   data_or_file > "${TMP_DIR}"/cipher_decrypt.yaml
-  if ! validate_hash &> /dev/null; then
+  if ! yq '. | keys' "${TMP_DIR}"/cipher_decrypt.yaml &> /dev/null; then
+    echo '-f FILE is expected to be YAML but it is not valid YAML.' >&2
+    echo 'Invalid yaml: '"'$input_file'" >&2
+    exit 1
+  fi
+
+  if ! validate_hash "${TMP_DIR}"/cipher_decrypt.yaml > /dev/null; then
     echo 'Checksum verification failed.  Refusing to decrypt.' >&2
     exit 1
   fi
@@ -442,7 +439,7 @@ decrypt_file() {
 
 rotate_key() {
   data_or_file > "${TMP_DIR}"/cipher_decrypt.yaml
-  if ! validate_hash &> /dev/null; then
+  if ! validate_hash "${TMP_DIR}"/cipher_decrypt.yaml > /dev/null; then
     echo 'Checksum verification failed.  Refusing to decrypt.' >&2
     exit 1
   fi

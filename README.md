@@ -22,6 +22,13 @@ Encrypt some text
 
     echo supersecret | ./repository-secrets.sh encrypt -o cipher.yaml
 
+### Docker example
+
+Using a minimal alpine image to encrypt and decrypt secrets.
+
+    docker build -t rs .
+    echo plaintext | docker run -i rs encrypt | docker run -i rs decrypt
+
 ### Help documentation
 
 `repository-secrets.sh` was written based on the 2024 proof of concept document.
