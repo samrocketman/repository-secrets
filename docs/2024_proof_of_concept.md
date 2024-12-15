@@ -17,10 +17,15 @@ Improvements over the [original proof of concept](proof_of_concept.md).
 Algorithms
 
 - SHA-256 used for hashing and data integrity.
-- RSA/ECB/PKCS1Padding for asymmetric encryption storage.  4096-bit or higher
-  recommended.
+- RSA/ECB/OAEPWithSHA-256AndMGF1Padding for asymmetric encryption storage.
+  4096-bit or higher recommended.
 - AES/CBC/PKCS5Padding for symmetric encryption storage.
 - PBKDF2WithHmacSHA256 for key derivation; 600000 iterations with 16-byte salt.
+
+Optionally enable usage of older OpenSSL options and algorithms.
+
+- AES/CBC/PKCS5Padding for symmetric encryption storage.
+- PBKDF2WithHmacSHA256 for key derivation; 600000 iterations with 8-byte salt.
 
 # Encrypting
 

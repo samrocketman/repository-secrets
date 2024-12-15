@@ -98,6 +98,16 @@ DECRYPT SUBCOMMAND OPTIONS
     Plain input meant to be which has been decrypted.
     Default: stdout
 
+  -s FIELD
+  --skip-field FIELD
+    Sometimes upon decryption you may want to override the AES or RSA
+    decryption options.  This option allows you to set an environment variable
+    of the same name while ignoring the value in the cipher YAML file.  FIELD
+    may be one of the following values: openssl_aes_args or openssl_rsa_args.
+    This option can be specified multiple times to skip multiple fields.
+    Default: ''
+
+
 ROTATE-KEY SUBCOMMAND OPTIONS
   -k FILE
   --private-key FILE
@@ -121,15 +131,15 @@ ENVIRONMENT VARIABLES
   openssl_saltlen
     The length of salt used by PBKDF2 during encryption or decryption.  Must be
     an integer between 1 and 16.
-    Default: '16'
+    Default: '8'
 
   openssl_aes_args
     Arguments used on openssl for AES encryption or decryption.
-    Default: '-aes-256-cbc -pbkdf2 -iter 600000 -saltlen 16'
+    Default: '-aes-256-cbc -pbkdf2 -iter 600000'
 
   openssl_rsa_args
     Arguments used on openssl for RSA encryption or decryption.
-    Default: ''
+    Default: '-pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
 
   PRIVATE_KEY
     Path to RSA private key file used for decryption.  Used as -keyin argument
@@ -171,13 +181,22 @@ EXAMPLES
 
   Advanced example using AWS KMS backend for private key.
 
-    url="https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/x86_64-Linux_libopenssl_engine_kms.so.gz"
+    url="https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/$(arch)-$(uname)_libopenssl_engine_kms.so.gz"
     curl -sSfL "$url" | gunzip > libopenssl_engine_kms.so
     export openssl_rsa_args='-keyform engine -engine ./libopenssl_engine_kms.so -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
     export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
     export PUBLIC_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
 
     echo hello | ./repository-secrets.sh encrypt
+
+  Advanced example using RSA public key to encrypt and AWS KMS to decrypt.
+
+    export kms_openssl_rsa_args='-keyform engine -engine ./libopenssl_engine_kms.so -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
+    export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
+    export PUBLIC_KEY=/tmp/id_rsa.pub
+
+    echo hello | ./repository-secrets.sh encrypt | \
+      openssl_rsa_args="$kms_openssl_rsa_args" ./repository-secrets.sh decrypt -s openssl_rsa_args
 
 
 OLD OPENSSL NOTICE
@@ -201,11 +220,19 @@ OLD OPENSSL NOTICE
       ./repository-secrets.sh encrypt -p id_rsa.pub -o new-cipher.yaml
     mv new-cipher.yaml cipher.yaml
 
+  For even older OpenSSL, you might not want to use
+  RSA/ECB/OAEPWithSHA-256AndMGF1Padding and instead use RSA/ECB/PKCS1Padding.
+  You can accomplish this by overriding openssl_rsa_args with an empty space.
+  Note the space is required so that the veriable is non-zero length.
+
+    openssl_rsa_args=' '
+    echo hello | ./repository-secrets.sh encrypt
+
 
 ALGORITHMS
 
   SHA-256 for data integrity verification.
-  RSA/ECB/PKCS1Padding for asymmetric encryption storage.
+  RSA/ECB/OAEPWithSHA-256AndMGF1Padding for asymmetric encryption storage.
   AES/CBC/PKCS5Padding for symmetric encryption storage.
   PBKDF2WithHmacSHA256 for key derivation; 600k iterations with 16-byte salt.
 ```

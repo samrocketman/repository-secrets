@@ -25,7 +25,7 @@ set -euo pipefail
 #
 openssl_saltlen="${openssl_saltlen:-16}"
 openssl_aes_args="${openssl_aes_args:--aes-256-cbc -pbkdf2 -iter 600000 -saltlen ${openssl_saltlen}}"
-openssl_rsa_args="${openssl_rsa_args:-}"
+openssl_rsa_args="${openssl_rsa_args:--pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256}"
 PRIVATE_KEY="${PRIVATE_KEY:-/tmp/id_rsa}"
 PUBLIC_KEY="${PUBLIC_KEY:-/tmp/id_rsa.pub}"
 
@@ -61,6 +61,7 @@ chmod 700 "${TMP_DIR}"
 output_file='-'
 input_file='-'
 sub_command=''
+skip_fields=()
 
 #
 # FUNCTIONS
@@ -128,6 +129,16 @@ DECRYPT SUBCOMMAND OPTIONS
   --output FILE
     Plain input meant to be which has been decrypted.
     Default: stdout
+
+  -s FIELD
+  --skip-field FIELD
+    Sometimes upon decryption you may want to override the AES or RSA
+    decryption options.  This option allows you to set an environment variable
+    of the same name while ignoring the value in the cipher YAML file.  FIELD
+    may be one of the following values: openssl_aes_args or openssl_rsa_args.
+    This option can be specified multiple times to skip multiple fields.
+    Default: ''
+
 
 ROTATE-KEY SUBCOMMAND OPTIONS
   -k FILE
@@ -202,13 +213,22 @@ EXAMPLES
 
   Advanced example using AWS KMS backend for private key.
 
-    url="https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/$(arch)-$(uname)_libopenssl_engine_kms.so.gz"
+    url="https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/\$(arch)-\$(uname)_libopenssl_engine_kms.so.gz"
     curl -sSfL "\$url" | gunzip > libopenssl_engine_kms.so
     export openssl_rsa_args='-keyform engine -engine ./libopenssl_engine_kms.so -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
     export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
     export PUBLIC_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
 
     echo hello | $0 encrypt
+
+  Advanced example using RSA public key to encrypt and AWS KMS to decrypt.
+
+    export kms_openssl_rsa_args='-keyform engine -engine ./libopenssl_engine_kms.so -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
+    export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
+    export PUBLIC_KEY=/tmp/id_rsa.pub
+
+    echo hello | $0 encrypt | \\
+      openssl_rsa_args="\$kms_openssl_rsa_args" $0 decrypt -s openssl_rsa_args
 
 
 OLD OPENSSL NOTICE
@@ -232,11 +252,19 @@ OLD OPENSSL NOTICE
       $0 encrypt -p id_rsa.pub -o new-cipher.yaml
     mv new-cipher.yaml cipher.yaml
 
+  For even older OpenSSL, you might not want to use
+  RSA/ECB/OAEPWithSHA-256AndMGF1Padding and instead use RSA/ECB/PKCS1Padding.
+  You can accomplish this by overriding openssl_rsa_args with an empty space.
+  Note the space is required so that the veriable is non-zero length.
+
+    openssl_rsa_args=' '
+    echo hello | $0 encrypt
+
 
 ALGORITHMS
 
   SHA-256 for data integrity verification.
-  RSA/ECB/PKCS1Padding for asymmetric encryption storage.
+  RSA/ECB/OAEPWithSHA-256AndMGF1Padding for asymmetric encryption storage.
   AES/CBC/PKCS5Padding for symmetric encryption storage.
   PBKDF2WithHmacSHA256 for key derivation; 600k iterations with 16-byte salt.
 EOF
@@ -272,6 +300,11 @@ process_arguments() {
       -f|--input-output-file)
         input_file="${2:-}"
         output_file="${2:-}"
+        shift
+        shift
+        ;;
+      -s|--skip-field)
+        skip_fields+=( "$2" )
         shift
         shift
         ;;
@@ -461,6 +494,16 @@ EOF
     | write_to_output
 }
 
+should_not_skip() {
+  local field="$1"
+  for x in "${skip_fields[@]}"; do
+    if [ "${field}" = "${x}" ]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
 decrypt_file() {
   data_or_file > "${TMP_DIR}"/cipher_decrypt.yaml
   if ! yq '. | keys' "${TMP_DIR}"/cipher_decrypt.yaml &> /dev/null; then
@@ -468,13 +511,16 @@ decrypt_file() {
     echo 'Invalid yaml: '"'$input_file'" >&2
     exit 1
   fi
-
+  if should_not_skip openssl_aes_args; then
+    openssl_aes_args="$(yq '.openssl_aes_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
+  fi
+  if should_not_skip openssl_rsa_args; then
+    openssl_rsa_args="$(yq '.openssl_rsa_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
+  fi
   if ! validate_hash "${TMP_DIR}"/cipher_decrypt.yaml > /dev/null; then
     echo 'Checksum verification failed.  Refusing to decrypt.' >&2
     exit 1
   fi
-  openssl_aes_args="$(yq '.openssl_aes_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
-  openssl_rsa_args="$(yq '.openssl_rsa_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
   yq '.salt' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/salt"
   yq '.passin' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/passin"
   yq '.data' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_aes_decrypt | write_to_output
