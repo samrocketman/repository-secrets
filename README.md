@@ -67,6 +67,13 @@ hash: |-
   4yhvtrEozkmhOVUdycLcGL9QWuOh7EoGgsnFvJkySNM=
 ```
 
+Which you can then decrypt.
+
+```bash
+./repository-secrets.sh decrypt -i cipher.yaml
+# prints to stdout supersecret
+```
+
 ### Docker example
 
 Using a minimal alpine image to encrypt and decrypt secrets.
