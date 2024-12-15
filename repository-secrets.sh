@@ -24,7 +24,8 @@ set -euo pipefail
 # ENVIRONMENT AND DEFAULTS
 #
 openssl_saltlen="${openssl_saltlen:-16}"
-openssl_args="${openssl_args:--aes-256-cbc -pbkdf2 -iter 600000 -saltlen ${openssl_saltlen}}"
+openssl_aes_args="${openssl_aes_args:--aes-256-cbc -pbkdf2 -iter 600000 -saltlen ${openssl_saltlen}}"
+openssl_rsa_args="${openssl_rsa_args:-}"
 PRIVATE_KEY="${PRIVATE_KEY:-/tmp/id_rsa}"
 PUBLIC_KEY="${PUBLIC_KEY:-/tmp/id_rsa.pub}"
 
@@ -89,7 +90,7 @@ SUBCOMMANDS
 
   rotate-key
       Performs private key rotation on enciphered YAML without changing
-      symmetrically encrypted data.  This will not modify data or openssl_args
+      symmetrically encrypted data.  This will not modify data or openssl_aes_args
       keys in the enciphered YAML.
 
 
@@ -182,16 +183,16 @@ OLD OPENSSL NOTICE
   $0 to be compatible with older OpenSSL releases.
 
     openssl_saltlen=8
-    openssl_args='-aes-256-cbc -pbkdf2 -iter 600000'
-    export openssl_saltlen openssl_args
+    openssl_aes_args='-aes-256-cbc -pbkdf2 -iter 600000'
+    export openssl_saltlen openssl_aes_args
     echo plaintext | $0 encrypt -o /tmp/cipher.yaml
 
   You can upgrade the encryption if migrating to OpenSSL 3.2 or later.  Note
   the old and new file names must be different.  Also note that openssl_saltlen
-  and openssl_args environment variables are prefixed on the first command and
+  and openssl_aes_args environment variables are prefixed on the first command and
   not exported to the second command.
 
-    openssl_saltlen=8 openssl_args='-aes-256-cbc -pbkdf2 -iter 600000' \\
+    openssl_saltlen=8 openssl_aes_args='-aes-256-cbc -pbkdf2 -iter 600000' \\
       $0 decrypt -i cipher.yaml -k id_rsa | \\
       $0 encrypt -p id_rsa.pub -o new-cipher.yaml
     mv new-cipher.yaml cipher.yaml
@@ -321,7 +322,7 @@ randomsalt() (
 
 stdin_aes_encrypt() {
   openssl enc \
-    ${openssl_args} \
+    ${openssl_aes_args} \
     -S "$(<"${TMP_DIR}"/salt)" \
     -pass file:"${TMP_DIR}"/passin \
     -a
@@ -329,18 +330,18 @@ stdin_aes_encrypt() {
 
 stdin_aes_decrypt() {
   openssl enc \
-    ${openssl_args} \
+    ${openssl_aes_args} \
     -S "$(<"${TMP_DIR}"/salt)" \
     -pass file:"${TMP_DIR}"/passin \
     -a -d
 }
 
 stdin_rsa_encrypt() {
-  openssl pkeyutl -encrypt -inkey "${PUBLIC_KEY}" -pubin | openssl enc -base64
+  openssl pkeyutl ${openssl_rsa_args} -encrypt -inkey "${PUBLIC_KEY}" -pubin | openssl enc -base64
 }
 
 stdin_rsa_decrypt() {
-  openssl enc -base64 -d | openssl pkeyutl -decrypt -inkey "${PRIVATE_KEY}"
+  openssl enc -base64 -d | openssl pkeyutl ${openssl_rsa_args} -decrypt -inkey "${PRIVATE_KEY}"
 }
 
 data_or_file() {
@@ -365,7 +366,7 @@ stdin_shasum() {
 }
 
 read_yaml_for_hash() {
-  yq e '.openssl_args, .salt, .passin, .data' "$1"
+  yq e '.openssl_aes_args, .openssl_rsa_args, .salt, .passin, .data' "$1"
 }
 
 validate_hash() {
@@ -407,7 +408,8 @@ EOF
     randompass > "${TMP_DIR}/passin"
     randomsalt > "${TMP_DIR}/salt"
 cat > "${TMP_DIR}"/cipher_encrypt.yaml <<EOF
-openssl_args: ${openssl_args}
+openssl_aes_args: ${openssl_aes_args}
+openssl_rsa_args: ${openssl_rsa_args}
 salt: |-
 $(stdin_rsa_encrypt < "${TMP_DIR}/salt" | sed 's/^/  /')
 passin: |-
@@ -436,7 +438,8 @@ decrypt_file() {
     echo 'Checksum verification failed.  Refusing to decrypt.' >&2
     exit 1
   fi
-  openssl_args="$(yq '.openssl_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
+  openssl_aes_args="$(yq '.openssl_aes_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
+  openssl_rsa_args="$(yq '.openssl_rsa_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
   yq '.salt' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/salt"
   yq '.passin' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/passin"
   yq '.data' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_aes_decrypt | write_to_output
@@ -448,14 +451,14 @@ rotate_key() {
     echo 'Checksum verification failed.  Refusing to decrypt.' >&2
     exit 1
   fi
-  openssl_args="$(yq '.openssl_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
+  openssl_aes_args="$(yq '.openssl_aes_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
   yq '.salt' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/salt"
   yq '.passin' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/passin"
   awk '$0 ~ /^data:/ { out="1"; print $0; next }; out == "1" && $0 ~ /^[^ ]/ { exit }; out == "1" { print $0 }' \
     < "${TMP_DIR}"/cipher_decrypt.yaml \
     > "${TMP_DIR}"/data.yaml
 cat > "${TMP_DIR}"/cipher_encrypt.yaml <<EOF
-openssl_args: ${openssl_args}
+openssl_aes_args: ${openssl_aes_args}
 salt: |-
 $(stdin_rsa_encrypt < "${TMP_DIR}/salt" | sed 's/^/  /')
 passin: |-
@@ -474,11 +477,6 @@ EOF
 #
 process_arguments "$@"
 validate_arguments
-
-if ! echo "$openssl_args" | grep '^[-a-z0-9 ]\+$' > /dev/null; then
-  echo 'openssl_args contains invalid characters.' >&2
-  exit 1
-fi
 
 if [ "${sub_command}" = encrypt ]; then
   encrypt_file
