@@ -14,8 +14,8 @@ those secrets with a private key.
 ### System Requirements
 
 - GNU Bash
-- GNU coreutils or similar providing `tr`, `shasum` or `sha256sum`, `mktemp`,
-  and `cat`.
+- GNU coreutils or similar providing `cat`, `cp`, `mktemp`, `shasum` or
+  `sha256sum`, and `tr`.
 - OpenSSL 3 (OpenSSL 3.2 or later recommended).
 - [yq](https://github.com/mikefarah/yq/) for YAML.
 
