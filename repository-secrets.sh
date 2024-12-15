@@ -47,6 +47,9 @@ missing_util tr || needs_util=1
 missing_util yq || needs_util=1
 missing_util bash || needs_util=1
 missing_util openssl || needs_util=1
+missing_util mktemp || needs_util=1
+missing_util cat || needs_util=1
+missing_util cp || needs_util=1
 if [ "${needs_util}" = 1 ]; then
   exit 1
 fi
