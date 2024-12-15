@@ -59,8 +59,8 @@ SUBCOMMANDS
 
   rotate-key
       Performs private key rotation on enciphered YAML without changing
-      symmetrically encrypted data.  This will not modify data or openssl_args
-      keys in the enciphered YAML.
+      symmetrically encrypted data.  This will not modify data,
+      openssl_aes_args, or openssl_rsa_args keys in the enciphered YAML.
 
 
 ENCRYPT SUBCOMMAND OPTIONS
@@ -117,6 +117,31 @@ ROTATE-KEY SUBCOMMAND OPTIONS
     new private key.  The data will not be modified.
 
 
+ENVIRONMENT VARIABLES
+  openssl_saltlen
+    The length of salt used by PBKDF2 during encryption or decryption.  Must be
+    an integer between 1 and 16.
+    Default: '16'
+
+  openssl_aes_args
+    Arguments used on openssl for AES encryption or decryption.
+    Default: '-aes-256-cbc -pbkdf2 -iter 600000 -saltlen 16'
+
+  openssl_rsa_args
+    Arguments used on openssl for RSA encryption or decryption.
+    Default: ''
+
+  PRIVATE_KEY
+    Path to RSA private key file used for decryption.  Used as -keyin argument
+    for openssl pkeyutl.
+    Defult: '/tmp/id_rsa'
+
+  PUBLIC_KEY
+    Path to RSA public key file used for encryption.  Used as -keyin argument
+    for openssl pkeyutl.
+    Defult: '/tmp/id_rsa.pub'
+
+
 EXAMPLES
 
   Generate RSA key pair for examples.
@@ -144,6 +169,16 @@ EXAMPLES
     export PUBLIC_KEY=new-public-key.pub
     ./repository-secrets.sh rotate-key -f /tmp/cipher.yaml
 
+  Advanced example using AWS KMS backend for private key.
+
+    url="https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/x86_64-Linux_libopenssl_engine_kms.so.gz"
+    curl -sSfL "$url" | gunzip > libopenssl_engine_kms.so
+    export openssl_rsa_args='-keyform engine -engine ./libopenssl_engine_kms.so -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
+    export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
+    export PUBLIC_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
+
+    echo hello | ./repository-secrets.sh encrypt
+
 
 OLD OPENSSL NOTICE
 
@@ -152,16 +187,16 @@ OLD OPENSSL NOTICE
   ./repository-secrets.sh to be compatible with older OpenSSL releases.
 
     openssl_saltlen=8
-    openssl_args='-aes-256-cbc -pbkdf2 -iter 600000'
-    export openssl_saltlen openssl_args
+    openssl_aes_args='-aes-256-cbc -pbkdf2 -iter 600000'
+    export openssl_saltlen openssl_aes_args
     echo plaintext | ./repository-secrets.sh encrypt -o /tmp/cipher.yaml
 
   You can upgrade the encryption if migrating to OpenSSL 3.2 or later.  Note
   the old and new file names must be different.  Also note that openssl_saltlen
-  and openssl_args environment variables are prefixed on the first command and
-  not exported to the second command.
+  and openssl_aes_args environment variables are prefixed on the first command
+  and not exported to the second command.
 
-    openssl_saltlen=8 openssl_args='-aes-256-cbc -pbkdf2 -iter 600000' \
+    openssl_saltlen=8 openssl_aes_args='-aes-256-cbc -pbkdf2 -iter 600000' \
       ./repository-secrets.sh decrypt -i cipher.yaml -k id_rsa | \
       ./repository-secrets.sh encrypt -p id_rsa.pub -o new-cipher.yaml
     mv new-cipher.yaml cipher.yaml
