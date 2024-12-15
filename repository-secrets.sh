@@ -82,7 +82,7 @@ DESCRIPTION
 SUBCOMMANDS
   encrypt
       Performs encryption operations with an RSA public key and outputs an
-      encrypted YAML file.  Binary data is allowed.
+      encrypted cipher YAML file.  Binary data is allowed.
 
   decrypt
       Performs decryption operations with an RSA private key and outputs

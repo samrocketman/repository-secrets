@@ -22,7 +22,7 @@ Encrypt some text.
 
     echo supersecret | ./repository-secrets.sh encrypt -o cipher.yaml
 
-Results in encrypted YAML like the following.
+Results in cipher YAML like the following.
 
 ```yaml
 openssl_aes_args: -aes-256-cbc -pbkdf2 -iter 600000
@@ -109,7 +109,7 @@ DESCRIPTION
 SUBCOMMANDS
   encrypt
       Performs encryption operations with an RSA public key and outputs an
-      encrypted YAML file.  Binary data is allowed.
+      encrypted cipher YAML file.  Binary data is allowed.
 
   decrypt
       Performs decryption operations with an RSA private key and outputs
