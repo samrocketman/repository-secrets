@@ -18,9 +18,54 @@ Generate a private and public key pair.
     openssl genrsa -out /tmp/id_rsa 4096
     openssl rsa -in /tmp/id_rsa -pubout -outform pem -out /tmp/id_rsa.pub
 
-Encrypt some text
+Encrypt some text.
 
     echo supersecret | ./repository-secrets.sh encrypt -o cipher.yaml
+
+Results in encrypted YAML like the following.
+
+```yaml
+openssl_aes_args: -aes-256-cbc -pbkdf2 -iter 600000
+openssl_rsa_args: -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256
+salt: |-
+  I51dA2unsNYb6dIHJ/oSS8BGXnQ0BxDD7/VLpAALlbKlobg156jVH+Hm17xwVD9y
+  ZkI9YVivkLsohhKvMR/KKGCfXP4bq3fgjjbbw0fq9Tz/KUDj4HxYDGVUKkOeVVgh
+  keOG6H3mWKIOs0HoOGcUCbse4bb4EZpYCTzYKxEfns6U5N8REMp6U11o81I4M21R
+  ixAhgn47FB03DeNcwVv43PHgjjm3j6GssfWIt+gfCPgZwFvJKU8tyie0nr8TJD+A
+  qsQ1ZK1ANQcrkOdB2P2454AWumW2I2kS33Wsv+ZWmI9FH42f1EQkO3jhk0qEpmMh
+  pWfNPRZObS6tFr1kRPW2mIHN0he+evkB8JJeTy8Jw7Cz6I+wmcR9p9qrZa8jRVgL
+  okTiigtl7UaIGf56+kbepnM1yp0kQBU18hM4KzTJRoOtpMUWP68Z/zASGmU32x44
+  BZT51g70pCu/vyW453Ln7O1xEHW8QYGeb1+io5bWPenBSm4GrVNeMFXfZuUN9+8K
+  PdNjjfq6EsSacutQaZ6fGRqbiaAG8qn9zP2kTUPYRiKFbBI+/y6X9ASUm5J4RDnZ
+  kDvizRvagtDqtA3dq1XsjibplLOs1bzH1yAJxssuGgYnUln4jLBUtDWUuc2XwC40
+  t0o8WNaCzeKu1B3FfQC9D20pZgZ+tZTjJq+hTTlbS8o=
+passin: |-
+  lju2hvVNdnYvw/cppqMaO+kD0RWFN34rdIF3V6ylSRZOsrX/CfK2T4ApICvAy06m
+  RSlfpnHOpp1eWTwUvGPbg1LfHsN28I4S7UGWzybRrRp+SLQtSqA8rTpa1uz8ypx3
+  GHKbrkGtvEOxCDBKMn5QPEayb261+9PhvLQPTvdkTQaY5k9Vv8P3d7qPAYUmaNIM
+  rCnyx2lHqpPAriBA3/1lBSJ7KNpZqnj4kftxW6YPAhrDOGhAYdkUC/6Hqwyj2ck3
+  0ZLOBinDvuZZjobpNYJQ/YvqEcbspFqFuRKkFM8GywJkyiUdNxLepgdm8/V/Q990
+  FyT2ik5Q+4Xvswzqba3asLZ2Kh43BPK+oVJc+uNwoSveBapy9SvGCuI+AGB34tic
+  gE/xf0FzQ3UOFmtUGx5wG9RApTDgGP1o2YVeMXLzLNcF30H8sZ2JLxOR8YFMuP5C
+  kOGrYaK42/QC5FyKWX3a/R6umU+qt8ij3+nxy26MRkl665USfke9SVTMwdjB4+U7
+  O9zi1XTqKQanN77td6Y2CCepxsWmHkaLJOuV0kNw4J2tlS8F0GjyZiTTq++cjrcA
+  PvIDQaUUOrdHJqczG/EEEzg/swFfNJbhFqo3DZuZIQMGjQ7x/6d1q/CCB9swkjou
+  MBIymns81TXiTIY4das0k7bp92tUCedwkSMaxismuDI=
+data: |-
+  TMq0QsWmyFQTr5IHWuHgtw==
+hash: |-
+  ECXdHwjCc1BDdTY6v8YIk+CNmnjCguOenHsHl4f8qISdHsVouxoA4mSsfg2Dw58p
+  5IStOtfQ4ktMZiFSnkrAhWisCtIdJqaCWp2/yQA1KCtLdRAT4qjtVTZMf9bT+oS0
+  aqbF9R7ODHXa8G90PqM0R4B7H7RHrRS4Bp0XhabJ+NAviTsmWneQf075WECfMqod
+  HDZRQrihhs1hPR8efBqnR5LWkLopGNLr9dvQvw0BY1kqT2TMJ/CUmj2A/QkTpCB+
+  ngqDfH9qepuI1VjMDrRMiz/Vy2h95sBkb4tbnjGznfo7TEpjb7G/W8OeJJ2pjIQm
+  y5x4O7GMRmZePBjVUhkRIQSQdpOk0HrZOHc6NaobV7yaaQ3Q4DVShZ0Nyd2dnOU6
+  XOCy6A/BoULX75VvWMWkAIFQ3CRh20QMlnceO80i+RXd3Bk+jGYaFiigFCULL+XY
+  544wyUrkWZC7/dPSXC47FcsqAmhF2XeDePJavTwyk1HdP6G/h1iWWhM0yoDUTwCL
+  64eP6dnqPHc3W5G+6bUTIlibVuryN4Lhw1V7KsDucadu3FAlV3hyuXLmuefVE3Xa
+  2tzWNqFQAuCEGiGMJFLBjHmsfBPtFXuYNMyhB3B/6fGdFaAltqL2Urj+HdlkCasA
+  4yhvtrEozkmhOVUdycLcGL9QWuOh7EoGgsnFvJkySNM=
+```
 
 ### Docker example
 
