@@ -74,6 +74,13 @@ Which you can then decrypt.
 # prints to stdout supersecret
 ```
 
+Encryption and decryption can be handled in streams.
+
+```bash
+echo another secret | ./repository-secrets.sh encrypt | ./repository-secrets.sh decrypt
+# 'another secret' is printed on stdout
+```
+
 ### Docker example
 
 Using a minimal alpine image to encrypt and decrypt secrets.
