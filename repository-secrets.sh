@@ -257,7 +257,7 @@ OLD OPENSSL NOTICE
   You can accomplish this by overriding openssl_rsa_args with an empty space.
   Note the space is required so that the veriable is non-zero length.
 
-    openssl_rsa_args=' '
+    export openssl_rsa_args=' '
     echo hello | $0 encrypt
 
 
@@ -267,6 +267,10 @@ ALGORITHMS
   RSA/ECB/OAEPWithSHA-256AndMGF1Padding for asymmetric encryption storage.
   AES/CBC/PKCS5Padding for symmetric encryption storage.
   PBKDF2WithHmacSHA256 for key derivation; 600k iterations with 16-byte salt.
+
+SOURCE
+  Created by Sam Gleske
+  https://github.com/samrocketman/repository-secrets
 EOF
 exit 1
 }

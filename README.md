@@ -11,6 +11,14 @@ those secrets with a private key.
 
 # repository-secrets.sh CLI utility
 
+### System Requirements
+
+- GNU Bash
+- GNU coreutils or similar providing `tr`, `shasum` or `sha256sum`, `mktemp`,
+  and `cat`.
+- OpenSSL 3 (OpenSSL 3.2 or later recommended).
+- [yq](https://github.com/mikefarah/yq/) for YAML.
+
 ### Example
 
 Generate a private and public key pair.
@@ -284,7 +292,7 @@ OLD OPENSSL NOTICE
   You can accomplish this by overriding openssl_rsa_args with an empty space.
   Note the space is required so that the veriable is non-zero length.
 
-    openssl_rsa_args=' '
+    export openssl_rsa_args=' '
     echo hello | ./repository-secrets.sh encrypt
 
 
@@ -294,4 +302,8 @@ ALGORITHMS
   RSA/ECB/OAEPWithSHA-256AndMGF1Padding for asymmetric encryption storage.
   AES/CBC/PKCS5Padding for symmetric encryption storage.
   PBKDF2WithHmacSHA256 for key derivation; 600k iterations with 16-byte salt.
+
+SOURCE
+  Created by Sam Gleske
+  https://github.com/samrocketman/repository-secrets
 ```
