@@ -76,3 +76,60 @@ Decryption wil be roughly in reverse of encryption.
 - Because data is stored with AES, there's theoretically no limit to the amount
   of data you can encrypt.
 - Unlike the previous proof of concept, binary data is allowed.
+- Cloud storage backends can be utilized for private key storage; such AWS KMS.
+
+# AWS KMS Usage
+
+I revived and updated a project named [openssl-engine-kms][openssl-engine-kms].
+
+Download the secrets engine.
+
+    curl -sSfLO https://raw.githubusercontent.com/samrocketman/yml-install-files/refs/tags/v3.1/download-utilities.sh
+    chmod 755 download-utilities.sh
+    curl -sSfL https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/openssl-engine-kms.yaml | ./download-utilities.sh -
+
+On Linux, copy the library as `kms.so` to `engines-3`
+
+    find /usr/lib -type d -name engines-3 | xargs -n1 cp ./libopenssl_engine_kms.so
+
+On MacOS, the binary is linked to homebrew openssl.  Copy to `kms.dylib`
+
+    cp libopenssl_engine_kms.dylib /opt/homebrew/Cellar/openssl@3/3.4.0/lib/engines-3/kms.dylib
+
+Generate an asymmetric KMS key with RSA 4096 to be used for Encryption and
+Decryption.
+
+Export the public key.  The intent is to allow develoeprs to encrypt using a
+locally stored public key and so no AWS login is required for encryption.
+
+    openssl pkey -engine kms -inform engine -in arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef -pubout > kms.pub
+
+Encrypting data with KMS
+
+    export PUBLIC_KEY=/tmp/id_rsa.pub
+    echo secret data | repository-secrets.sh encrypt -o cipher.yaml
+
+Decrypting data with KMS.
+
+    export openssl_rsa_args='-keyform engine -engine kms -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
+    export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
+    repository-secrets.sh decrypt -s openssl_rsa_args -i cipher.yaml
+
+Any key management storage can be used as long as there's an openssl engine
+available to utilize it for encryption or decryption.
+
+# Other considerations
+
+I considered generating the 32-byte key and 16-byte IV directly.  This would be
+more secure than using a key derivation function.  However,
+[openssl-enc][openssl-enc] `-K key` option and `-iv IV` option both require
+specifying the random data as CLI arguments.  This leaks encryption information
+to untrusted processes such as `ps` or `top` run by other users.  OpenSSL
+supports passing arguments on stdin which would be more secure than specifying
+CLI arguments, but a primary feature of this proof of concept is being able to
+encrypt and decrypt data via stdin.  Because of arguments leaking sensitive
+information I opted for using PBKDF2 with salt since password arguments can read
+from a file.
+
+[openssl-enc]: https://docs.openssl.org/3.4/man1/openssl-enc/
+[openssl-engine-kms]: https://github.com/samrocketman/openssl-engine-kms

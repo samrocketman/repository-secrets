@@ -216,9 +216,9 @@ EXAMPLES
 
   Advanced example using AWS KMS backend for private key.
 
-    url="https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/\$(arch)-\$(uname)_libopenssl_engine_kms.so.gz"
+    url="https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/x86_64-Linux_libopenssl_engine_kms.so.gz"
     curl -sSfL "\$url" | gunzip > libopenssl_engine_kms.so
-    export openssl_rsa_args='-keyform engine -engine ./libopenssl_engine_kms.so -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
+    export openssl_rsa_args='-keyform engine -engine kms -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
     export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
     export PUBLIC_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
 
@@ -226,7 +226,7 @@ EXAMPLES
 
   Advanced example using RSA public key to encrypt and AWS KMS to decrypt.
 
-    export kms_openssl_rsa_args='-keyform engine -engine ./libopenssl_engine_kms.so -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
+    export kms_openssl_rsa_args='-keyform engine -engine kms -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
     export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
     export PUBLIC_KEY=/tmp/id_rsa.pub
 
@@ -279,9 +279,6 @@ exit 1
 }
 
 process_arguments() {
-  if [ "${1:-}" = help ]; then
-    helptext
-  fi
   while [ "$#" -gt 0 ]; do
     case "${1}" in
       -o|--output)
@@ -315,6 +312,9 @@ process_arguments() {
         shift
         shift
         ;;
+      -h|--help|help)
+        helptext
+        ;;
       *)
         if [ -z "${sub_command:-}" ]; then
           sub_command="$1"
@@ -345,23 +345,19 @@ process_arguments() {
 validate_arguments() {
   result=0
   if [ "$sub_command" = encrypt ]; then
-    if [ ! -f "${PUBLIC_KEY:-}" ]; then
-      echo 'RSA public key does not exist.' >&2
-      result=1
+    if [ ! -f "${PUBLIC_KEY:-}" ] && ! grep -F :kms: <<< "${PUBLIC_KEY:-}" > /dev/null; then
+      echo 'Warning: RSA public key does not exist.' >&2
     fi
   elif [ "$sub_command" = decrypt ]; then
-    if [ ! -f "${PRIVATE_KEY:-}" ]; then
-      echo 'RSA private key does not exist.' >&2
-      result=1
+    if [ ! -f "${PRIVATE_KEY:-}" ] && ! grep -F :kms: <<< "${PRIVATE_KEY:-}" > /dev/null; then
+      echo 'Warning: RSA private key does not exist.' >&2
     fi
   elif [ "$sub_command" = 'rotate-key' ]; then
-    if [ ! -f "${PUBLIC_KEY:-}" ]; then
-      echo 'RSA public key does not exist.' >&2
-      result=1
+    if [ ! -f "${PUBLIC_KEY:-}" ] && ! grep -F :kms: <<< "${PUBLIC_KEY:-}" > /dev/null; then
+      echo 'Warning: RSA public key does not exist.' >&2
     fi
-    if [ ! -f "${PRIVATE_KEY:-}" ]; then
-      echo 'RSA private key does not exist.' >&2
-      result=1
+    if [ ! -f "${PRIVATE_KEY:-}" ] && ! grep -F :kms: <<< "${PRIVATE_KEY:-}" > /dev/null; then
+      echo 'Warning: RSA private key does not exist.' >&2
     fi
     if [ ! "x$input_file" = "x$output_file" ]; then
       echo 'Input-output mismatch.  Use -f FILE option.' >&2
@@ -503,6 +499,9 @@ EOF
 
 should_not_skip() {
   local field="$1"
+  if [ "${#skip_fields[@]}" = 0 ]; then
+    return 0
+  fi
   for x in "${skip_fields[@]}"; do
     if [ "${field}" = "${x}" ]; then
       return 1
