@@ -214,25 +214,43 @@ EXAMPLES
     export PUBLIC_KEY=new-public-key.pub
     $0 rotate-key -f /tmp/cipher.yaml
 
-  Advanced example using AWS KMS backend for private key.
+AWS KMS SECRETS ENGINE
 
-    url="https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/x86_64-Linux_libopenssl_engine_kms.so.gz"
-    curl -sSfL "\$url" | gunzip > libopenssl_engine_kms.so
+  Install kms.so (on Linux) or kms.dylib (on Mac).
+
+    curl -sSfLO https://raw.githubusercontent.com/samrocketman/yml-install-files/refs/tags/v3.1/download-utilities.sh
+    chmod 755 download-utilities.sh
+    curl -sSfL https://github.com/samrocketman/openssl-engine-kms/releases/download/0.1.1/openssl-engine-kms.yaml | ./download-utilities.sh -
+
+  The above commands will download either ./libopenssl_engine_kms.so or
+  libopenssl_engine_kms.dylib depending on your architecture and OS.  If
+  nothing was downloaded, then your platform does not have a pre-compiled
+  binary.  The binary must be copied to OpenSSL engines-3 directory.
+
+  On Linux, install kms.so.
+
+    find /usr/lib -type d -name engines-3 | xargs -I'{}' cp ./libopenssl_engine_kms.so '{}/kms.so'
+
+  On arm64 MacOS, install kms.dylib
+
+    cp libopenssl_engine_kms.dylib /opt/homebrew/Cellar/openssl@3/3.4.0/lib/engines-3/kms.dylib
+
+  In AWS KMS, create an asymmetric key to be used for encryption and
+  decryption.  The key spec should be RSA_4096.  Export the public key for
+  local encryption which won't require an AWS login to encrypt.
+
+    openssl pkey -engine kms -inform engine -in arn:aws:kms:... -pubout > kms.pub
+
+  Encrypting a file, binary data, or plaintext data using the public key.
+
+    export PUBLIC_KEY=kms.pub
+    echo hello | $0 encrypt -o cipher.yaml
+
+  On a backend system, use AWS KMS to decrypt the data with the private key.
+
     export openssl_rsa_args='-keyform engine -engine kms -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
-    export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
-    export PUBLIC_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
-
-    echo hello | $0 encrypt
-
-  Advanced example using RSA public key to encrypt and AWS KMS to decrypt.
-
-    export kms_openssl_rsa_args='-keyform engine -engine kms -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256'
-    export PRIVATE_KEY=arn:aws:kms:us-east-1:111122223333:key/deadbeef-dead-dead-dead-deaddeafbeef
-    export PUBLIC_KEY=/tmp/id_rsa.pub
-
-    echo hello | $0 encrypt | \\
-      openssl_rsa_args="\$kms_openssl_rsa_args" $0 decrypt -s openssl_rsa_args
-
+    export PRIVATE_KEY=arn:aws:kms:...
+    $0 decrypt -i cipher.yaml
 
 OLD OPENSSL NOTICE
 
@@ -273,6 +291,8 @@ ALGORITHMS
 
 SOURCE
   Created by Sam Gleske
+  https://github.com/samrocketman/yml-install-files
+  https://github.com/samrocketman/openssl-engine-kms
   https://github.com/samrocketman/repository-secrets
 EOF
 exit 1
