@@ -14,10 +14,12 @@ those secrets with a private key.
 ### System Requirements
 
 - GNU Bash
-- GNU coreutils or similar providing `cat`, `cp`, `mktemp`, `shasum` or
+- GNU coreutils or similar providing `cat`, `cp`, `dd`, `mktemp`, `shasum` or
   `sha256sum`, and `tr`.
 - OpenSSL 3 (OpenSSL 3.2 or later recommended).
 - [yq](https://github.com/mikefarah/yq/) for YAML.
+- GNU or BSD `awk`
+- `xxd`
 
 ### Example
 
@@ -35,44 +37,22 @@ Results in cipher YAML like the following.
 ```yaml
 openssl_aes_args: -aes-256-cbc -pbkdf2 -iter 600000
 openssl_rsa_args: -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256
-salt: |-
-  I51dA2unsNYb6dIHJ/oSS8BGXnQ0BxDD7/VLpAALlbKlobg156jVH+Hm17xwVD9y
-  ZkI9YVivkLsohhKvMR/KKGCfXP4bq3fgjjbbw0fq9Tz/KUDj4HxYDGVUKkOeVVgh
-  keOG6H3mWKIOs0HoOGcUCbse4bb4EZpYCTzYKxEfns6U5N8REMp6U11o81I4M21R
-  ixAhgn47FB03DeNcwVv43PHgjjm3j6GssfWIt+gfCPgZwFvJKU8tyie0nr8TJD+A
-  qsQ1ZK1ANQcrkOdB2P2454AWumW2I2kS33Wsv+ZWmI9FH42f1EQkO3jhk0qEpmMh
-  pWfNPRZObS6tFr1kRPW2mIHN0he+evkB8JJeTy8Jw7Cz6I+wmcR9p9qrZa8jRVgL
-  okTiigtl7UaIGf56+kbepnM1yp0kQBU18hM4KzTJRoOtpMUWP68Z/zASGmU32x44
-  BZT51g70pCu/vyW453Ln7O1xEHW8QYGeb1+io5bWPenBSm4GrVNeMFXfZuUN9+8K
-  PdNjjfq6EsSacutQaZ6fGRqbiaAG8qn9zP2kTUPYRiKFbBI+/y6X9ASUm5J4RDnZ
-  kDvizRvagtDqtA3dq1XsjibplLOs1bzH1yAJxssuGgYnUln4jLBUtDWUuc2XwC40
-  t0o8WNaCzeKu1B3FfQC9D20pZgZ+tZTjJq+hTTlbS8o=
-passin: |-
-  lju2hvVNdnYvw/cppqMaO+kD0RWFN34rdIF3V6ylSRZOsrX/CfK2T4ApICvAy06m
-  RSlfpnHOpp1eWTwUvGPbg1LfHsN28I4S7UGWzybRrRp+SLQtSqA8rTpa1uz8ypx3
-  GHKbrkGtvEOxCDBKMn5QPEayb261+9PhvLQPTvdkTQaY5k9Vv8P3d7qPAYUmaNIM
-  rCnyx2lHqpPAriBA3/1lBSJ7KNpZqnj4kftxW6YPAhrDOGhAYdkUC/6Hqwyj2ck3
-  0ZLOBinDvuZZjobpNYJQ/YvqEcbspFqFuRKkFM8GywJkyiUdNxLepgdm8/V/Q990
-  FyT2ik5Q+4Xvswzqba3asLZ2Kh43BPK+oVJc+uNwoSveBapy9SvGCuI+AGB34tic
-  gE/xf0FzQ3UOFmtUGx5wG9RApTDgGP1o2YVeMXLzLNcF30H8sZ2JLxOR8YFMuP5C
-  kOGrYaK42/QC5FyKWX3a/R6umU+qt8ij3+nxy26MRkl665USfke9SVTMwdjB4+U7
-  O9zi1XTqKQanN77td6Y2CCepxsWmHkaLJOuV0kNw4J2tlS8F0GjyZiTTq++cjrcA
-  PvIDQaUUOrdHJqczG/EEEzg/swFfNJbhFqo3DZuZIQMGjQ7x/6d1q/CCB9swkjou
-  MBIymns81TXiTIY4das0k7bp92tUCedwkSMaxismuDI=
+pbkdf2_password_length: 389
+pbkdf2_salt_length: 8
 data: |-
-  TMq0QsWmyFQTr5IHWuHgtw==
+  sIk/SjszW6tJz3M7gaqkHQ==
 hash: |-
-  ECXdHwjCc1BDdTY6v8YIk+CNmnjCguOenHsHl4f8qISdHsVouxoA4mSsfg2Dw58p
-  5IStOtfQ4ktMZiFSnkrAhWisCtIdJqaCWp2/yQA1KCtLdRAT4qjtVTZMf9bT+oS0
-  aqbF9R7ODHXa8G90PqM0R4B7H7RHrRS4Bp0XhabJ+NAviTsmWneQf075WECfMqod
-  HDZRQrihhs1hPR8efBqnR5LWkLopGNLr9dvQvw0BY1kqT2TMJ/CUmj2A/QkTpCB+
-  ngqDfH9qepuI1VjMDrRMiz/Vy2h95sBkb4tbnjGznfo7TEpjb7G/W8OeJJ2pjIQm
-  y5x4O7GMRmZePBjVUhkRIQSQdpOk0HrZOHc6NaobV7yaaQ3Q4DVShZ0Nyd2dnOU6
-  XOCy6A/BoULX75VvWMWkAIFQ3CRh20QMlnceO80i+RXd3Bk+jGYaFiigFCULL+XY
-  544wyUrkWZC7/dPSXC47FcsqAmhF2XeDePJavTwyk1HdP6G/h1iWWhM0yoDUTwCL
-  64eP6dnqPHc3W5G+6bUTIlibVuryN4Lhw1V7KsDucadu3FAlV3hyuXLmuefVE3Xa
-  2tzWNqFQAuCEGiGMJFLBjHmsfBPtFXuYNMyhB3B/6fGdFaAltqL2Urj+HdlkCasA
-  4yhvtrEozkmhOVUdycLcGL9QWuOh7EoGgsnFvJkySNM=
+  CUmTHeMGuJxwlxtgfpI9gP5Hu4q9ewluifadchPcDRExb/L4J1CoF9g7ssJ/T4zk
+  96htHxZwRkLWqEekBktgN5SFmn1n905xYB8xvEXRrfysz/FDb92E4lmFxxAKOf+V
+  A4YVCu36VskxhN15W+TNgiOfhJl0cTpyy9z3L9zwuIKfQG1fq4x8bb9E5t1N/RTy
+  ZRmJByE4BcGWxPB0OIkaikkZnze71CV+Cg8F3Ovmn3fORN61aGeUhMAkbsMHB6Jp
+  zU3JJ9yZS/UPwQgsv1VMHjNdMAkoxZWecdT0OCNU5d3G+Shn/TDBLYgtqT02aQiU
+  74cBRVb2/xxjYnQqWBLbcE5xVjtuG0TODnHH7gWD/bjiEbRi+rxB8FF1dbopa26D
+  8NfVeQh2T4SdVKJkbyAPlY0vPhcxAihf0HoryS8SPraLIYAFBnZWMruW9WSdGe2c
+  oPvXaqAjZiR57UbZOps9ssxyjQzoZAtO46ynsTuYNTjwEt7y1rx5p9E+09KSJBsg
+  r/cNNke3cGuRcAAh3lEHpJycyYjNWorzyIk/1F91dxJxQIrssA2ehXEN19lZCPT/
+  Bs8ynGN8A7j3gRHwnEtpW8Vx1YeWsfa+zudO1PzEoOISj4PCu4I757D01zUm28jZ
+  +MD08rkuEbHiWHITcran9VCbLNX9Hhpz4/tzJ32iOr4=
 ```
 
 Which you can then decrypt.
@@ -104,7 +84,9 @@ Help documentation: `./repository-secrets.sh help`
 
 ```
 SYNOPSIS
-  ./repository-secrets.sh [sub_command] [options]
+  ./repository-secrets.sh encrypt [options]
+  ./repository-secrets.sh decrypt [options]
+  ./repository-secrets.sh rotate-key [options]
 
 
 DESCRIPTION
@@ -195,14 +177,14 @@ ROTATE-KEY SUBCOMMAND OPTIONS
 
 
 ENVIRONMENT VARIABLES
-  openssl_saltlen
+  pbkdf2_salt_length
     The length of salt used by PBKDF2 during encryption or decryption.  Must be
     an integer between 1 and 16.
-    Default: '16'
+    Default: '8'
 
   openssl_aes_args
     Arguments used on openssl for AES encryption or decryption.
-    Default: '-aes-256-cbc -pbkdf2 -iter 600000 -saltlen 16'
+    Default: '-aes-256-cbc -pbkdf2 -iter 600000'
 
   openssl_rsa_args
     Arguments used on openssl for RSA encryption or decryption.
@@ -211,12 +193,19 @@ ENVIRONMENT VARIABLES
   PRIVATE_KEY
     Path to RSA private key file used for decryption.  Used as -keyin argument
     for openssl pkeyutl.
-    Defult: '/tmp/id_rsa'
+    Default: '/tmp/id_rsa'
 
   PUBLIC_KEY
     Path to RSA public key file used for encryption.  Used as -keyin argument
     for openssl pkeyutl.
-    Defult: '/tmp/id_rsa.pub'
+    Default: '/tmp/id_rsa.pub'
+
+  pbkdf2_password_length
+    Number of characters of the passphrased used to AES encrypt data.  This
+    should be set to the largest number possible given the current design.  The
+    current default assumes RSA 4096-bit keys.  If you require 2048-bit keys,
+    then set the password length to 108.
+    Default: 364
 
 
 EXAMPLES
@@ -286,24 +275,8 @@ AWS KMS SECRETS ENGINE
 
 OLD OPENSSL NOTICE
 
-  Old OpenSSL versions before OpenSSL 3.2 do not have -saltlen option
-  available.  You must set a few environment variables in order for
-  ./repository-secrets.sh to be compatible with older OpenSSL releases.
-
-    openssl_saltlen=8
-    openssl_aes_args='-aes-256-cbc -pbkdf2 -iter 600000'
-    export openssl_saltlen openssl_aes_args
-    echo plaintext | ./repository-secrets.sh encrypt -o /tmp/cipher.yaml
-
-  You can upgrade the encryption if migrating to OpenSSL 3.2 or later.  Note
-  the old and new file names must be different.  Also note that openssl_saltlen
-  and openssl_aes_args environment variables are prefixed on the first command
-  and not exported to the second command.
-
-    openssl_saltlen=8 openssl_aes_args='-aes-256-cbc -pbkdf2 -iter 600000' \
-      ./repository-secrets.sh decrypt -i cipher.yaml -k id_rsa | \
-      ./repository-secrets.sh encrypt -p id_rsa.pub -o new-cipher.yaml
-    mv new-cipher.yaml cipher.yaml
+  Old OpenSSL versions before OpenSSL 3.2 do not have -saltlen option available.
+  The environment variable defaults are intended to reflect this.
 
   For even older OpenSSL, you might not want to use
   RSA/ECB/OAEPWithSHA-256AndMGF1Padding and instead use RSA/ECB/PKCS1Padding.

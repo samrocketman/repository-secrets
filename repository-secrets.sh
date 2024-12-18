@@ -23,8 +23,9 @@ set -euo pipefail
 #
 # ENVIRONMENT AND DEFAULTS
 #
-openssl_saltlen="${openssl_saltlen:-16}"
-openssl_aes_args="${openssl_aes_args:--aes-256-cbc -pbkdf2 -iter 600000 -saltlen ${openssl_saltlen}}"
+pbkdf2_password_length="${pbkdf2_password_length:-389}"
+pbkdf2_salt_length="${pbkdf2_salt_length:-8}"
+openssl_aes_args="${openssl_aes_args:--aes-256-cbc -pbkdf2 -iter 600000}"
 openssl_rsa_args="${openssl_rsa_args:--pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:SHA256}"
 PRIVATE_KEY="${PRIVATE_KEY:-/tmp/id_rsa}"
 PUBLIC_KEY="${PUBLIC_KEY:-/tmp/id_rsa.pub}"
@@ -50,6 +51,8 @@ missing_util openssl || needs_util=1
 missing_util mktemp || needs_util=1
 missing_util cat || needs_util=1
 missing_util cp || needs_util=1
+missing_util awk || needs_util=1
+missing_util xxd || needs_util=1
 if [ "${needs_util}" = 1 ]; then
   exit 1
 fi
@@ -72,7 +75,9 @@ skip_fields=()
 helptext() {
 cat <<EOF
 SYNOPSIS
-  $0 [sub_command] [options]
+  $0 encrypt [options]
+  $0 decrypt [options]
+  $0 rotate-key [options]
 
 
 DESCRIPTION
@@ -163,10 +168,10 @@ ROTATE-KEY SUBCOMMAND OPTIONS
 
 
 ENVIRONMENT VARIABLES
-  openssl_saltlen
+  pbkdf2_salt_length
     The length of salt used by PBKDF2 during encryption or decryption.  Must be
     an integer between 1 and 16.
-    Default: '${openssl_saltlen:-}'
+    Default: '${pbkdf2_salt_length:-}'
 
   openssl_aes_args
     Arguments used on openssl for AES encryption or decryption.
@@ -179,12 +184,19 @@ ENVIRONMENT VARIABLES
   PRIVATE_KEY
     Path to RSA private key file used for decryption.  Used as -keyin argument
     for openssl pkeyutl.
-    Defult: '${PRIVATE_KEY:-}'
+    Default: '${PRIVATE_KEY:-}'
 
   PUBLIC_KEY
     Path to RSA public key file used for encryption.  Used as -keyin argument
     for openssl pkeyutl.
-    Defult: '${PUBLIC_KEY:-}'
+    Default: '${PUBLIC_KEY:-}'
+
+  pbkdf2_password_length
+    Number of characters of the passphrased used to AES encrypt data.  This
+    should be set to the largest number possible given the current design.  The
+    current default assumes RSA 4096-bit keys.  If you require 2048-bit keys,
+    then set the password length to 108.
+    Default: 364
 
 
 EXAMPLES
@@ -254,24 +266,8 @@ AWS KMS SECRETS ENGINE
 
 OLD OPENSSL NOTICE
 
-  Old OpenSSL versions before OpenSSL 3.2 do not have -saltlen option
-  available.  You must set a few environment variables in order for
-  $0 to be compatible with older OpenSSL releases.
-
-    openssl_saltlen=8
-    openssl_aes_args='-aes-256-cbc -pbkdf2 -iter 600000'
-    export openssl_saltlen openssl_aes_args
-    echo plaintext | $0 encrypt -o /tmp/cipher.yaml
-
-  You can upgrade the encryption if migrating to OpenSSL 3.2 or later.  Note
-  the old and new file names must be different.  Also note that openssl_saltlen
-  and openssl_aes_args environment variables are prefixed on the first command
-  and not exported to the second command.
-
-    openssl_saltlen=8 openssl_aes_args='-aes-256-cbc -pbkdf2 -iter 600000' \\
-      $0 decrypt -i cipher.yaml -k id_rsa | \\
-      $0 encrypt -p id_rsa.pub -o new-cipher.yaml
-    mv new-cipher.yaml cipher.yaml
+  Old OpenSSL versions before OpenSSL 3.2 do not have -saltlen option available.
+  The environment variable defaults are intended to reflect this.
 
   For even older OpenSSL, you might not want to use
   RSA/ECB/OAEPWithSHA-256AndMGF1Padding and instead use RSA/ECB/PKCS1Padding.
@@ -402,21 +398,44 @@ validate_arguments() {
 # functions
 randompass() (
   set +o pipefail
-  LC_ALL=C tr -dc -- "-'"'_!@#$%^&*(){}|[]\;:",./<>?0-9a-fA-F' < /dev/urandom | head -c128
+  [ "${pbkdf2_password_length:-0}" -gt 124 ] || {
+    echo 'ERROR: pbkdf2_password_length must be 125 or higher.' >&2
+    exit 1
+  }
+  # 92 possible characters
+  # 30 special characters, 0-9, a-z, A-Z
+  LC_ALL=C tr -dc -- "-'"'~=+_!@#$%^&*(){}[]\;:",./<>?0-9a-fA-F' < /dev/urandom | head -c"${pbkdf2_password_length}"
 )
 
 randomsalt() (
   set +o pipefail
-  local hexbytes="$(( $openssl_saltlen * 2 ))"
-  LC_ALL=C tr -dc '0-9a-f' < /dev/urandom | head -c"$hexbytes"
+  local hexbits="$(( $pbkdf2_salt_length * 2 ))"
+  LC_ALL=C tr -dc '0-9a-f' < /dev/urandom | head -c"$hexbits"
 )
 
 stdin_aes_encrypt() {
+  local result
   openssl enc \
     ${openssl_aes_args} \
     -S "$(<"${TMP_DIR}"/salt)" \
     -pass file:"${TMP_DIR}"/passin \
-    -a
+    -a || {
+result=$?
+cat >&2 <<'EOF'
+AES encryption has failed.
+
+This is typical for versions of OpenSSL less than 3.2.  You may be able to fix
+this with the following environment variables.
+
+    pbkdf2_salt_length=8
+    openssl_aes_args='-aes-256-cbc -pbkdf2 -iter 600000'
+    pbkdf2_password_length=389
+    export pbkdf2_salt_length openssl_aes_args pbkdf2_password_length
+
+EOF
+  echo "See $0 help" >&2
+  return "$result"
+}
 }
 
 stdin_aes_decrypt() {
@@ -427,8 +446,53 @@ stdin_aes_decrypt() {
     -a -d
 }
 
+get_rsa_key_size() {
+  if [ -f "${PUBLIC_KEY:-}" ]; then
+    openssl rsa -pubin -in "${PUBLIC_KEY}" -text -noout | \
+      grep -o '[0-9]\+ bit' | \
+      sed 's/ bit$//'
+  fi
+}
+
 stdin_rsa_encrypt() {
-  openssl pkeyutl ${openssl_rsa_args} -encrypt -inkey "${PUBLIC_KEY}" -pubin | openssl enc -base64
+  local result
+  local rsa_key_size
+  openssl pkeyutl ${openssl_rsa_args} -encrypt -inkey "${PUBLIC_KEY}" -pubin | \
+    openssl enc -base64 || {
+      result=$?
+cat >&2 <<EOF
+RSA encryption failed.  Possibly because of incorrect environment settings.
+
+The equation for maximum data RSA keys can encrypt is:
+
+    <RSA key size in bits>/8-66 = <data limit in bytes>
+
+Current salt length: ${pbkdf2_salt_length}
+Current pbkdf2 password length: ${pbkdf2_password_length}
+
+Attempted to encrypt: $((49 + pbkdf2_salt_length + pbkdf2_password_length)) bytes
+
+EOF
+      rsa_key_size="$(get_rsa_key_size)"
+      if [ -n "${rsa_key_size:-}" ]; then
+cat >&2 <<EOF
+Detected RSA ${rsa_key_size} key.  Update your environment variables:
+
+    export pbkdf2_password_length=$(( rsa_key_size/8 - (115 + pbkdf2_salt_length) ))
+EOF
+      else
+cat >&2 <<EOF
+Could not detect RSA public key.  You should manually calculate
+pbkdf2_password_length for the best security.  The lowest recommended value is
+the following environment variable.
+
+    export pbkdf2_password_length=125
+EOF
+      fi
+      echo >&2
+      echo "See $0 help" >&2
+      return "$result"
+    }
 }
 
 stdin_rsa_decrypt() {
@@ -457,22 +521,49 @@ stdin_shasum() {
 }
 
 read_yaml_for_hash() {
-  yq e '.openssl_aes_args, .openssl_rsa_args, .salt, .passin, .data' "$1"
+  cat <<EOF
+$(<"${TMP_DIR}/passin")
+$(<"${TMP_DIR}/salt")
+$(yq e '.openssl_aes_args, .openssl_rsa_args, .pbkdf2_salt_length, .pbkdf2_password_length, .data' "$1")
+EOF
+}
+
+b64encode_hashsalt() {
+  head -c64 "${TMP_DIR}"/hash > "${TMP_DIR}"/hashsalt
+  cat "${TMP_DIR}"/salt >> "${TMP_DIR}"/hashsalt
+  xxd -r -p < "${TMP_DIR}"/hashsalt | openssl enc -base64 -A
+}
+
+b64decode_hashsalt() {
+  openssl enc -base64 -d -A | xxd -p | tr -d '\n' > "${TMP_DIR}"/hashsalt
+  head -c64 "${TMP_DIR}"/hashsalt | sed 's/$/  -/' > "${TMP_DIR}"/hash
+  dd if="${TMP_DIR}"/hashsalt bs=64 skip=1 status=none > "${TMP_DIR}"/salt
 }
 
 validate_hash() {
   yq '.hash' "$1" \
-    | stdin_rsa_decrypt > "${TMP_DIR}"/hash
-  read_yaml_for_hash "$1" \
-    | stdin_shasum -c "${TMP_DIR}"/hash
+    | stdin_rsa_decrypt > "${TMP_DIR}"/scratch
+  awk -F'|' '{print $1}' < "${TMP_DIR}"/scratch | tr -d '\n' > "${TMP_DIR}"/passin
+  awk -F'|' '{print $2}' < "${TMP_DIR}"/scratch | tr -d '\n' | b64decode_hashsalt
+  discovered_password_length="$(wc -c < "${TMP_DIR}"/passin)"
+
+  if [ "$discovered_password_length" -lt 125 ]; then
+    echo 'ERROR: the pbkdf2_password_length is less than 125 characters.' >&2
+    echo 'Refusing to decrypt.' >&2
+    exit 1
+  fi
+  read_yaml_for_hash "$1" | stdin_shasum -c "${TMP_DIR}"/hash
 }
 
 create_hash() {
   output="${1%.yaml}"_hash.yaml
-cat > "$output" <<EOF
-hash: |-
-$(read_yaml_for_hash "$1" | stdin_shasum | stdin_rsa_encrypt | sed 's/^/  /')
+  read_yaml_for_hash "$1" | stdin_shasum > "${TMP_DIR}/hash"
+  echo 'hash: |-' > "$output"
+(
+cat <<EOF
+$(<"${TMP_DIR}/passin")|$(b64encode_hashsalt)
 EOF
+) | tr -d '\n' | stdin_rsa_encrypt | sed 's/^/  /' >> "$output"
 }
 
 write_to_output() {
@@ -483,35 +574,28 @@ write_to_output() {
   fi
 }
 
-encrypt_file() {
-  if [ -f "$output_file" ] && validate_hash "$output_file" &> /dev/null; then
-    cp "$output_file" "${TMP_DIR}"/output.yaml
-    yq '.salt' "${TMP_DIR}"/output.yaml | stdin_rsa_decrypt > "${TMP_DIR}/salt"
-    yq '.passin' "${TMP_DIR}"/output.yaml | stdin_rsa_decrypt > "${TMP_DIR}/passin"
-    yq -i 'del(.data)' "${TMP_DIR}"/output.yaml
-    yq -i 'del(.hash)' "${TMP_DIR}"/output.yaml
-cat > "${TMP_DIR}"/cipher_encrypt.yaml <<EOF
-$(cat "${TMP_DIR}"/output.yaml)
-data: |-
-$(data_or_file | stdin_aes_encrypt | sed 's/^/  /')
-EOF
-  else
-    randompass > "${TMP_DIR}/passin"
-    randomsalt > "${TMP_DIR}/salt"
+create_cipher_encrypt_yaml() {
 cat > "${TMP_DIR}"/cipher_encrypt.yaml <<EOF
 openssl_aes_args: ${openssl_aes_args}
 openssl_rsa_args: ${openssl_rsa_args}
-salt: |-
-$(stdin_rsa_encrypt < "${TMP_DIR}/salt" | sed 's/^/  /')
-passin: |-
-$(stdin_rsa_encrypt < "${TMP_DIR}/passin" | sed 's/^/  /')
+pbkdf2_password_length: ${pbkdf2_password_length}
+pbkdf2_salt_length: ${pbkdf2_salt_length}
 data: |-
-$(data_or_file | stdin_aes_encrypt | sed 's/^/  /')
+$(cat)
 EOF
-  fi
+}
+
+combine_yaml() {
+  yq eval-all '. as $item ireduce ({}; . *+ $item)' "${@}"
+}
+
+encrypt_file() {
+  randompass > "${TMP_DIR}/passin"
+  randomsalt > "${TMP_DIR}/salt"
+  data_or_file | stdin_aes_encrypt | sed 's/^/  /' | create_cipher_encrypt_yaml
 
   create_hash "${TMP_DIR}"/cipher_encrypt.yaml
-  yq eval-all '. as $item ireduce ({}; . *+ $item)' \
+  combine_yaml \
     "${TMP_DIR}"/cipher_encrypt.yaml \
     "${TMP_DIR}"/cipher_encrypt_hash.yaml \
     | write_to_output
@@ -543,12 +627,11 @@ decrypt_file() {
   if should_not_skip openssl_rsa_args; then
     openssl_rsa_args="$(yq '.openssl_rsa_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
   fi
+  pbkdf2_password_length="$(yq '.pbkdf2_password_length' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
   if ! validate_hash "${TMP_DIR}"/cipher_decrypt.yaml > /dev/null; then
-    echo 'Checksum verification failed.  Refusing to decrypt.' >&2
+   echo 'Checksum verification failed.  Refusing to decrypt.' >&2
     exit 1
   fi
-  yq '.salt' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/salt"
-  yq '.passin' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/passin"
   yq '.data' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_aes_decrypt | write_to_output
 }
 
@@ -558,22 +641,16 @@ rotate_key() {
     echo 'Checksum verification failed.  Refusing to decrypt.' >&2
     exit 1
   fi
-  openssl_aes_args="$(yq '.openssl_aes_args' "${TMP_DIR}"/cipher_decrypt.yaml | head -n1)"
-  yq '.salt' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/salt"
-  yq '.passin' "${TMP_DIR}"/cipher_decrypt.yaml | stdin_rsa_decrypt > "${TMP_DIR}/passin"
+  openssl_aes_args="$(yq '.openssl_aes_args' "${TMP_DIR}"/cipher_decrypt.yaml)"
+  openssl_rsa_args="$(yq '.openssl_rsa_args' "${TMP_DIR}"/cipher_decrypt.yaml)"
   awk '$0 ~ /^data:/ { out="1"; print $0; next }; out == "1" && $0 ~ /^[^ ]/ { exit }; out == "1" { print $0 }' \
     < "${TMP_DIR}"/cipher_decrypt.yaml \
     > "${TMP_DIR}"/data.yaml
-cat > "${TMP_DIR}"/cipher_encrypt.yaml <<EOF
-openssl_aes_args: ${openssl_aes_args}
-salt: |-
-$(stdin_rsa_encrypt < "${TMP_DIR}/salt" | sed 's/^/  /')
-passin: |-
-$(stdin_rsa_encrypt < "${TMP_DIR}/passin" | sed 's/^/  /')
-$(cat "${TMP_DIR}"/data.yaml)
-EOF
+
+  create_cipher_encrypt_yaml < "${TMP_DIR}"/data.yaml
+
   create_hash "${TMP_DIR}"/cipher_encrypt.yaml
-  yq eval-all '. as $item ireduce ({}; . *+ $item)' \
+  combine_yaml \
     "${TMP_DIR}"/cipher_encrypt.yaml \
     "${TMP_DIR}"/cipher_encrypt_hash.yaml \
     | write_to_output
