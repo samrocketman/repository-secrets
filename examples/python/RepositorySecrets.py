@@ -63,10 +63,11 @@ class RepositorySecrets:
     def set_pbkdf2_iterations(self, iterations):
         self.openssl_aes_args = "-aes-256-cbc -pbkdf2 -iter %d" % int(iterations)
 
-    def load_kms_client(self, kms_client):
+    def load_kms_client(self, kms_client, kms_algorithm = "RSAES_OAEP_SHA_256"):
         if not isinstance(kms_client, botocore.client.BaseClient):
             raise AssertionError("Not a valid KMS client.")
         self.kms_client = kms_client
+        self.kms_algorithm = kms_algorithm
 
     def load_public_pem(self, public_pem):
         if isinstance(public_pem, str) and "-----BEGIN PUBLIC KEY-----" in public_pem:
@@ -215,7 +216,7 @@ class RepositorySecrets:
         plain_hash = self.kms_client.decrypt(
             KeyId=self.private_key,
             CiphertextBlob=base64.b64decode(cipher_yaml["hash"]),
-            EncryptionAlgorithm="RSAES_OAEP_SHA_256",
+            EncryptionAlgorithm=self.kms_algorithm,
         )["Plaintext"]
         return self.__decode_plain_hash(plain_hash)
 
