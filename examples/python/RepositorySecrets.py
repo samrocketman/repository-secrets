@@ -338,7 +338,7 @@ if __name__ == "__main__":
     with open("../../new-cipher.yaml", "w") as f:
         f.write(new_cipher_yaml)
         f.write("\n")
-    print("Run 'diff -u ../../cipher.yaml ../../new-cipher.yaml' to see differences.")
+    print("Run 'diff -u ../../cipher.yaml ../../new-cipher.yaml' to see differences.", file=sys.stderr)
     print("\nEncrypt example", file=sys.stderr)
     print("=" * 80, file=sys.stderr)
     print(rs.encrypt("This text was encrypted by Python!\n".encode("utf-8")), end="")
