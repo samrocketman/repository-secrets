@@ -52,10 +52,10 @@ class RepositorySecrets:
             raise AssertionError("pbkdf2_salt_length must be greater than 0.")
         elif saltlen > 16:
             raise AssertionError("pbkdf2_salt_length must be less than or equal to 16.")
-        self.pbkdf2_salt_length = int(saltlen)
+        self.pbkdf2_salt_length = saltlen
         if isinstance(self.public_key, rsa.RSAPublicKey):
-            calculated_max_pword = self.public_key.key_size / 8 - (
-                115 + self.pbkdf2_salt_length
+            calculated_max_pword = int(
+                self.public_key.key_size / 8 - (115 + self.pbkdf2_salt_length)
             )
             if calculated_max_pword < self.pbkdf2_password_length:
                 self.pbkdf2_password_length = calculated_max_pword
@@ -63,7 +63,7 @@ class RepositorySecrets:
     def set_pbkdf2_iterations(self, iterations):
         self.openssl_aes_args = "-aes-256-cbc -pbkdf2 -iter %d" % int(iterations)
 
-    def load_kms_client(self, kms_client, kms_algorithm = "RSAES_OAEP_SHA_256"):
+    def load_kms_client(self, kms_client, kms_algorithm="RSAES_OAEP_SHA_256"):
         if not isinstance(kms_client, botocore.client.BaseClient):
             raise AssertionError("Not a valid KMS client.")
         self.kms_client = kms_client
@@ -74,18 +74,14 @@ class RepositorySecrets:
             self.public_key = serialization.load_pem_public_key(
                 public_pem.encode("utf-8")
             )
+            self.set_pbkdf2_salt_length(self.pbkdf2_salt_length)
             return
         elif not os.path.exists(public_pem):
             self.public_key = public_pem
             return
         with open(public_pem, "rb") as key_file:
             self.public_key = serialization.load_pem_public_key(key_file.read())
-        self.pbkdf2_password_length = int(
-            os.getenv(
-                "pbkdf2_password_length",
-                self.public_key.key_size / 8 - (115 + self.pbkdf2_salt_length),
-            )
-        )
+        self.set_pbkdf2_salt_length(self.pbkdf2_salt_length)
 
     def load_private_pem(self, private_pem):
         if (
@@ -133,6 +129,8 @@ class RepositorySecrets:
     def rotate(self, cipher_yaml):
         parsed_cipher_yaml = self.__parse_cipher_yaml(cipher_yaml)
         known_hash, passin, salt = self.__decrypt_with_client(parsed_cipher_yaml)
+        if len(passin) > self.pbkdf2_password_length:
+            return self.encrypt(self.decrypt(cipher_yaml))
         self.__verify(known_hash, passin, salt, parsed_cipher_yaml)
         new_cipher_yaml = self.__get_initial_cipher_yaml()
         new_cipher_yaml["data"] = parsed_cipher_yaml["data"]
@@ -338,8 +336,10 @@ if __name__ == "__main__":
     new_cipher_yaml = rs.rotate("../../cipher.yaml")
     with open("../../new-cipher.yaml", "w") as f:
         f.write(new_cipher_yaml)
-        f.write("\n")
-    print("Run 'diff -u ../../cipher.yaml ../../new-cipher.yaml' to see differences.", file=sys.stderr)
+    print(
+        "Run 'diff -u ../../cipher.yaml ../../new-cipher.yaml' to see differences.",
+        file=sys.stderr,
+    )
     print("\nEncrypt example", file=sys.stderr)
     print("=" * 80, file=sys.stderr)
     print(rs.encrypt("This text was encrypted by Python!\n".encode("utf-8")), end="")
