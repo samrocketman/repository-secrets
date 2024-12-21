@@ -1,9 +1,6 @@
 """
 KMS header is a format for binary blob data which was encrypted with KMS.
 
-Copyright (c) 2015-2024 Sam Gleske - https://github.com/samrocketman/repository-secrets
-MIT Licensed
-
 For encryption,
   pip install cryptography
 
@@ -12,6 +9,96 @@ For decryption,
 
 Algorithm:
   RSA (2048, 3072, or 4096) with OAEP SHA1 or OAEP SHA256 padding
+
+Author:
+  Proposal by Sam Gleske
+  Copyright (c) 2015-2024 Sam Gleske - https://github.com/samrocketman/repository-secrets
+  MIT Licensed
+
+Proposal:
+  For applications where data encrypted at rest is a requirement.  This
+  class proposes the concept of an asymmetric KMS header. The encrypted
+  data to be symmetrically encrypted and the keys to decrypt are stored by
+  encrypting them with an asymmetric public key.  The KMS header would be
+  at the beginning symmetrically encrypted data.
+
+More about the KMS header:
+  Generically, a KMS header is an ARN, with the asymmetric algorithm, with
+  the asymmetrically encrypted cipher data.  This class is not responsible
+  for decryption.  It can return the encrypted data which is part of the
+  header intended to be decrypted.
+
+  A KMS header is a KMS ARN, asymmetric algorithm algorithm, and cipher
+  text as a contiguous piece of binary data.  When writing encrypted data
+  the KMS header gets written first followed by the symmetrically encrypted
+  data.
+
+Developer use case:
+  On a front-end system, encrypt data symmetrically and store the
+  information necessary to decrypt as KMS header.  The data will be secured
+  in any data storage.  The front-end system can only encrypt.  The public
+  key can be stored within the application to reduce KMS API calls.  KMS
+  need not be used for encryption operations.
+
+  A backend system can use the KMS Header to decrypt with the private key
+  using KMS.  Because the main portion of the data is encrypted
+  symmetrically, there's a cost savings with reduced KMS API calls
+  decrypting small amounts of data.  KMS is not used for
+
+  The first 16 bytes of the KMS header is the KMS key ID.  To determine if
+  a key is rotated on all binary blobs you need only inspect the first 16 bytes.
+
+  To determine if a specific AWS account ID is in use you can read the
+  first 32 bytes.  The first 16 bytes is the KMS key ID and the second 16
+  bytes is the AWS account ID.
+
+Binary Format:
+  First 35 bytes (KMS ARN):
+    16 bytes = KMS Key ID
+    16 bytes = AWS Account ID
+    3 bytes = AWS Region
+
+  1 byte algorithm: RSA_2048 (0x01), RSA_3072 (0x02), RSA_4096 (0x03)
+
+  Followed 256-512 bytes of RSA cipher data. (still part of the KMS header)
+
+  Followed by symmetrically encrypted data. (not part of the KMS header)
+
+  See also __len__(self) decription.
+
+Examles:
+  Empty example
+    header = KMSHeader()
+    header.add_arn("arn:...")
+    header.add_algorithm("RSA_...")
+    header.add_cipher_data(rsa_encrypted_binary_data)
+    header.to_binary()
+    header.to_base64()
+    len(header) # get current binary header length
+  Instantiate a KMS Header.
+    header = KMSHeader("arn:...")
+    header = KMSHeader("arn:...", algorithm, key_spec)
+    header = KMSHeader(kms_header_binary_data)
+    header = KMSHeader.from_base64(kms_header_binary_data_base64_encoded)
+  Add encrypted data to KMS Header.
+    header.add_cipher_data(rsa_encrypted_binary_data)
+  Export a KMS Header.
+    header.to_binary()
+    header.to_base64()
+  Extract information from KMS Header.
+    header.get_arn()
+    header.get_algorithm()
+    header.get_cipher_data()
+  Working with decryption:
+    kms_information = KMSHeader().get_partial_kms_header(encrypted_binary[:36])
+    header = KMSHeader(encrypted_binary)
+    symmetric_keys = header.decrypt()
+    symmetric_ciphertext = encrypted_binary[len(header):]
+  Work with encryption:
+    header = KMSHeader("arn:...")
+    header.add_public_key(pem_encoded_rsa_public_key)
+    header.encrypt(symmetric_keys)
+    header.to_binary() + symmetric_ciphertext
 """
 
 import base64
@@ -35,96 +122,24 @@ except ModuleNotFoundError:
 
 
 class KMSHeader:
-    """
-    Author:
-      Proposal by Sam Gleske
-      Copyright (c) 2015-2024 Sam Gleske - https://github.com/samrocketman/repository-secrets
-      MIT Licensed
+    """Creates an instance of a KMS header.
 
-    Proposal:
-      For applications where data encrypted at rest is a requirement.  This
-      class proposes the concept of an asymmetric KMS header. The encrypted
-      data to be symmetrically encrypted and the keys to decrypt are stored by
-      encrypting them with an asymmetric public key.  The KMS header would be
-      at the beginning symmetrically encrypted data.
+    Algorithms:
+      RSAES_OAEP_SHA_1
+      RSAES_OAEP_SHA_256
 
-    More about the KMS header:
-      Generically, a KMS header is an ARN, with the asymmetric algorithm, with
-      the asymmetrically encrypted cipher data.  This class is not responsible
-      for decryption.  It can return the encrypted data which is part of the
-      header intended to be decrypted.
+    Key specs:
+      RSA_2048
+      RSA_3072
+      RSA_4096
 
-      A KMS header is a KMS ARN, asymmetric algorithm algorithm, and cipher
-      text as a contiguous piece of binary data.  When writing encrypted data
-      the KMS header gets written first followed by the symmetrically encrypted
-      data.
+    Args:
+      arn_or_header: Can be a KMS ARN (str) or binary KMS header.
+      algorithm: A supported algorithm KMS would use to decrypt.
+      key_spec: A supported key spec KMS would store.
 
-    Developer use case:
-      On a front-end system, encrypt data symmetrically and store the
-      information necessary to decrypt as KMS header.  The data will be secured
-      in any data storage.  The front-end system can only encrypt.  The public
-      key can be stored within the application to reduce KMS API calls.  KMS
-      need not be used for encryption operations.
-
-      A backend system can use the KMS Header to decrypt with the private key
-      using KMS.  Because the main portion of the data is encrypted
-      symmetrically, there's a cost savings with reduced KMS API calls
-      decrypting small amounts of data.  KMS is not used for
-
-      The first 16 bytes of the KMS header is the KMS key ID.  To determine if
-      a key is rotated on all binary blobs you need only inspect the first 16 bytes.
-
-      To determine if a specific AWS account ID is in use you can read the
-      first 32 bytes.  The first 16 bytes is the KMS key ID and the second 16
-      bytes is the AWS account ID.
-
-    Binary Format:
-      First 35 bytes (KMS ARN):
-        16 bytes = KMS Key ID
-        16 bytes = AWS Account ID
-        3 bytes = AWS Region
-
-      1 byte algorithm: RSA_2048 (0x01), RSA_3072 (0x02), RSA_4096 (0x03)
-
-      Followed 256-512 bytes of RSA cipher data. (still part of the KMS header)
-
-      Followed by symmetrically encrypted data. (not part of the KMS header)
-
-      See also __len__(self) decription.
-
-    Examles:
-      Empty example
-        header = KMSHeader()
-        header.add_arn("arn:...")
-        header.add_algorithm("RSA_...")
-        header.add_cipher_data(rsa_encrypted_binary_data)
-        header.to_binary()
-        header.to_base64()
-        len(header) # get current binary header length
-      Instantiate a KMS Header.
-        header = KMSHeader("arn:...")
-        header = KMSHeader("arn:...", algorithm)
-        header = KMSHeader(kms_header_binary_data)
-        header = KMSHeader.from_base64(kms_header_binary_data_base64_encoded)
-      Add encrypted data to KMS Header.
-        header.add_cipher_data(rsa_encrypted_binary_data)
-      Export a KMS Header.
-        header.to_binary()
-        header.to_base64()
-      Extract information from KMS Header.
-        header.get_arn()
-        header.get_algorithm()
-        header.get_cipher_data()
-      Working with decryption:
-        kms_information = KMSHeader().get_partial_kms_header(encrypted_binary[:36])
-        header = KMSHeader(encrypted_binary)
-        symmetric_keys = header.decrypt()
-        symmetric_ciphertext = encrypted_binary[len(header):]
-      Work with encryption:
-        header = KMSHeader("arn:...")
-        header.add_public_key(pem_encoded_rsa_public_key)
-        header.encrypt(symmetric_keys)
-        header.to_binary() + symmetric_ciphertext
+    Raises:
+      ValueError: If any argument provided is not valid.
     """
 
     # 3-byte region, 16-byte AWS account ID, 16-byte kms key ID, 512-byte RSA cipher text (4096-bit key), AES cipher data unlimited
@@ -174,32 +189,17 @@ class KMSHeader:
     def __init__(
         self, arn_or_header=None, algorithm="RSAES_OAEP_SHA_256", key_spec=None
     ):
-        """Creates an instance of a KMS header.
-
-        Algorithms:
-          RSAES_OAEP_SHA_1
-          RSAES_OAEP_SHA_256
-
-        Key specs:
-          RSA_2048
-          RSA_3072
-          RSA_4096
-
-        Args:
-          arn_or_header: Can be a KMS ARN (str) or binary KMS header.
-          algorithm: A supported algorithm KMS would use to decrypt.
-
-        Raises:
-          ValueError: If any argument provided is not valid.
-        """
         self.algorithm = None
         self.arn = None
         self.cipher_data = None
         self.key_spec = None
         self.public_key = None
         hash_algs = ["RSAES_OAEP_SHA_1", "RSAES_OAEP_SHA_256"]
+        key_specs = ["RSA_2048", "RSA_3072", "RSA_4096"]
         if algorithm not in hash_algs:
             raise ValueError("algorithm must be one of: %s" % ", ".join(hash_algs))
+        if key_spec is not None and key_spec not in key_specs:
+            raise ValueError("key_spec must be one of: %s" % ", ".join(key_specs))
         self.add_algorithm(algorithm)
         self.add_algorithm(key_spec)
         if isinstance(arn_or_header, str):
@@ -225,6 +225,8 @@ class KMSHeader:
         self.arn = self.__hex_to_kms_arn(arn_data[:70])
         if data_size >= 36:
             self.__add_algorithm_hex(arn_data[70:])
+        if self.key_spec is None:
+            return
         max_header_bytes = 36 + self.__get_key_bytes()
         if data_size >= max_header_bytes:
             self.cipher_data = arn_or_header[36:max_header_bytes]
