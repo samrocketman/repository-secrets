@@ -50,3 +50,12 @@ Show decrypt and encrypt with cipher text.
 Pipe python-encrypted output into `repository-secrets.sh` to show compatibility.
 
     ./RepositorySecrets.py | ../../repository-secrets.sh decrypt
+
+# Stream encrypted data or backend encrypted binary blobs
+
+See the [KMSHeader](KMSHeader.py) class.  It is recommended to read its help
+documentation from within Python.
+
+    python3
+    from KMSHeader import KMSHeader
+    help(KMSHeader)
