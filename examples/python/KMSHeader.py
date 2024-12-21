@@ -16,41 +16,43 @@ Author:
   MIT Licensed
 
 Proposal:
-  For applications where data encrypted at rest is a requirement.  This
-  class proposes the concept of an asymmetric KMS header. The encrypted
-  data to be symmetrically encrypted and the keys to decrypt are stored by
-  encrypting them with an asymmetric public key.  The KMS header would be
-  at the beginning symmetrically encrypted data.
+  For applications where data encrypted at rest is a requirement.  This class
+  proposes the concept of an asymmetric KMS header. The encrypted data to be
+  symmetrically encrypted and the keys to decrypt are stored by encrypting them
+  with an asymmetric public key.  The KMS header would be at the beginning of
+  symmetrically encrypted data.
 
 More about the KMS header:
-  Generically, a KMS header is an ARN, with the asymmetric algorithm, with
-  the asymmetrically encrypted cipher data.  This class is not responsible
-  for decryption.  It can return the encrypted data which is part of the
-  header intended to be decrypted.
+  Generically, a KMS header is an ARN, with the asymmetric algorithm, with the
+  asymmetrically encrypted cipher data.  This class is not responsible for
+  symmetric decryption.  It stores and decrypts symmetric keys from asymmetric
+  encrypted data.
 
-  A KMS header is a KMS ARN, asymmetric algorithm algorithm, and cipher
-  text as a contiguous piece of binary data.  When writing encrypted data
-  the KMS header gets written first followed by the symmetrically encrypted
+  A KMS header is a KMS ARN, asymmetric algorithms used to encrypt, and cipher
+  text as a contiguous piece of binary data.  When writing encrypted data, the
+  KMS header must be written first followed by the symmetrically encrypted
   data.
 
 Developer use case:
-  On a front-end system, encrypt data symmetrically and store the
-  information necessary to decrypt as KMS header.  The data will be secured
-  in any data storage.  The front-end system can only encrypt.  The public
-  key can be stored within the application to reduce KMS API calls.  KMS
-  need not be used for encryption operations.
+  On a front-end system, encrypt data symmetrically and store the information
+  necessary to decrypt as KMS header.  The data will be secured in any data
+  storage.  The front-end system can only encrypt.  The public key can be
+  stored within the application to reduce KMS API calls.  KMS need not be used
+  for encryption operations.
 
-  A backend system can use the KMS Header to decrypt with the private key
-  using KMS.  Because the main portion of the data is encrypted
-  symmetrically, there's a cost savings with reduced KMS API calls
-  decrypting small amounts of data.  KMS is not used for
+  A backend system can use the KMS Header to decrypt with the private key using
+  KMS.  Because the main portion of the data is encrypted symmetrically,
+  there's a cost savings with reduced KMS API calls decrypting small amounts of
+  data.  KMS is not used for symmetric decryption.
 
-  The first 16 bytes of the KMS header is the KMS key ID.  To determine if
-  a key is rotated on all binary blobs you need only inspect the first 16 bytes.
+  Partial inspection of binary blobs supported which enables key rotation.
 
-  To determine if a specific AWS account ID is in use you can read the
-  first 32 bytes.  The first 16 bytes is the KMS key ID and the second 16
-  bytes is the AWS account ID.
+  The first 16 bytes of the KMS header is the KMS key ID.  To determine if a
+  key is rotated on all binary blobs you need only inspect the first 16 bytes.
+
+  To determine if a specific AWS account ID is in use you can read the first 32
+  bytes.  The first 16 bytes is the KMS key ID and the second 16 bytes is the
+  AWS account ID.
 
 Binary Format:
   First 35 bytes (KMS ARN):
