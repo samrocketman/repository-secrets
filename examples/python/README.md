@@ -54,8 +54,6 @@ Pipe python-encrypted output into `repository-secrets.sh` to show compatibility.
 # Stream encrypted data or backend encrypted binary blobs
 
 See the [KMSHeader](KMSHeader.py) class.  It is recommended to read its help
-documentation from within Python.
+documentation from within Python via pydoc.
 
-    python3
-    from KMSHeader import KMSHeader
-    help(KMSHeader)
+    python3 -m pydoc KMSHeader
