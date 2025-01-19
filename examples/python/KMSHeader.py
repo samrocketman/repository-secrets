@@ -294,7 +294,9 @@ class KMSHeader:
         if self.key_spec is not None:
             header_data += self.__algorithm_to_bin()
             # version + 2 bytes unused reserve (0000)
-            header_data += binascii.unhexlify(self.__regint_to_hex(self.version, 4) + "0000")
+            header_data += binascii.unhexlify(
+                self.__regint_to_hex(self.version, 4) + "0000"
+            )
             if self.cipher_data is not None:
                 header_data += self.cipher_data
         return header_data
@@ -459,10 +461,10 @@ class KMSHeader:
           algorithm.
         """
         if not isinstance(partial_binary_kms_data, bytes) or (
-            len(partial_binary_kms_data) not in [16, 32, 35, 36]
+            len(partial_binary_kms_data) not in [16, 32, 35, 36, 38]
         ):
             raise ValueError(
-                "partial_binary_kms_data is expected to be 16, 32, 35, or 36 bytes."
+                "partial_binary_kms_data is expected to be 16, 32, 35, 36, or 38 bytes."
             )
         data_size = len(partial_binary_kms_data)
         arn_hex = binascii.hexlify(partial_binary_kms_data).decode()
@@ -471,8 +473,15 @@ class KMSHeader:
             kms_information["account"] = self.__hex_to_account(arn_hex[32:64])
         if data_size >= 35:
             kms_information["region"] = self.__hex_to_region(arn_hex[64:70])
-        if data_size == 36:
-            kms_information["algorithm"] = self.__get_algorithm(arn_hex[70:])
+            kms_information["kms_arn"] = "arn:aws:kms:%s:%s:key/%s" % (
+                kms_information["region"],
+                kms_information["account"],
+                kms_information["keyid"],
+            )
+        if data_size >= 36:
+            kms_information["algorithm"] = self.__get_algorithm(arn_hex[70:72])
+        if data_size == 38:
+            kms_information["version"] = self.__reghex_to_int(arn_hex[72:76])
         return kms_information
 
     def encrypt(self, plain_data):
