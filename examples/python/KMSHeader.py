@@ -3,7 +3,7 @@ KMS header is a format for binary blob data which was encrypted with KMS.  The
 symmetrically encrypted data is assumed to be handled by the end-user and the
 data encryption keys stored within the KMS Header asymmetrically encrypted.
 The KMS Header provides envelope encryption where the private keys to access
-the encrypted blob is stored in KMS.
+the encrypted blob is stored in Amazon KMS.
 
 For encryption,
   pip install cryptography
