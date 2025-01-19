@@ -1,5 +1,9 @@
 """
-KMS header is a format for binary blob data which was encrypted with KMS.
+KMS header is a format for binary blob data which was encrypted with KMS.  The
+symmetrically encrypted data is assumed to be handled by the end-user and the
+data encryption keys stored within the KMS Header asymmetrically encrypted.
+The KMS Header provides envelope encryption where the private keys to access
+the encrypted blob is stored in KMS.
 
 For encryption,
   pip install cryptography
@@ -23,15 +27,19 @@ Proposal:
   symmetrically encrypted data.
 
 More about the KMS header:
-  Generically, a KMS header is an ARN, with the asymmetric algorithm, with the
-  asymmetrically encrypted cipher data.  This class is not responsible for
-  symmetric decryption.  It stores and decrypts symmetric keys from asymmetric
-  encrypted data.
+  A KMS header is a binary format with information about how to decrypt data
+  stored at the beginning followed by symmetrically  encrypted data in one
+  contiguous blob.
 
-  A KMS header is a KMS ARN, asymmetric algorithms used to encrypt, and cipher
-  text as a contiguous piece of binary data.  When writing encrypted data, the
-  KMS header must be written first followed by the symmetrically encrypted
-  data.
+  A KMS header is a KMS ARN, information about asymmetric algorithms used to
+  encrypt, user-configurable version information, and cipher text as a
+  contiguous piece of binary data.  When writing encrypted data, the KMS header
+  must be written first followed by the symmetrically encrypted data.  As one
+  big encrypted blob the data is stored with envelope encryption with private
+  keys secured within Amazon KMS.
+
+  KMS header encrypted blobs can be stored in any backend: a database, S3, on
+  disk, or elsewhere.  Specifically designed for Amazon KMS.
 
 Developer use case:
   On a front-end system, encrypt data symmetrically and store the information
@@ -106,6 +114,34 @@ Examles:
     header.add_public_key(pem_encoded_rsa_public_key)
     header.encrypt(symmetric_keys)
     header.to_binary() + symmetric_ciphertext
+
+Iterating and migrating KMS header blobs:
+  Multiple features of the KMS header have been included in consideration of
+  migrating encrypted data.  The first 16 bytes is the KMS key ID.  This means
+  you can gather which binary blobs are encrypted by a particular KMS key
+  merely by retrieving the first 16 bytes.
+
+  KMSHeader().get_partial_kms_header(blob_data) returns a HashMap of
+  information about the encrypted data such as AWS account, region, KMS key ID,
+  KMS ARN of the private key, key spec and algorithm used to asymmetrically
+  encrypt the header, and user configurable version information.
+
+  A user-configurable version (2 bytes of the header) is available for
+  versioning symmetric encryption configurations in use by end-users.  By
+  default KMSHeader().get_version() returns 0 as the first iteration of
+  symmetric encryption.  However, industry standards and use cases change. It
+  must not be assumed that an end-user will always use the same method for
+  symmetrically encrypting data.  This is where the KMS header version is
+  available for end-user configuration.
+
+  A KMS header version can iterate from 0, 1, 2, etc through 65535.  In total,
+  including the initial use of the KMS header, an end-user can iterate on
+  symmetrically encrypted algorithms in use up to 65536 times.  Beyond this, a
+  user might consider rotating encrypted data to remove algorithms in oldest
+  use.
+
+  You can set the version of encrypted data with KMSHeader.set_version(int) and
+  get the version in use via KMSHeader.get_version.
 """
 
 import base64
@@ -453,21 +489,23 @@ class KMSHeader:
         For example, S3 allows to partially read objects.
 
         Args:
-          partial_binary_kms_data: The first 16, 32, 35, or 36 bytes of a KMS
-          header.
+          partial_binary_kms_data: The first 16, 32, 35, 36, or 38 bytes of a KMS
+          header.  All data after 38 bytes is ignored since it isn't relevant.
 
         Returns:
           A dictionary with one or more keys: keyid, account, region, and
           algorithm.
         """
         if not isinstance(partial_binary_kms_data, bytes) or (
-            len(partial_binary_kms_data) not in [16, 32, 35, 36, 38]
+            len(partial_binary_kms_data) < 16
         ):
             raise ValueError(
-                "partial_binary_kms_data is expected to be 16, 32, 35, 36, or 38 bytes."
+                "partial_binary_kms_data is expected to be between 16 or more bytes (after 40 bytes data is ignored)."
             )
         data_size = len(partial_binary_kms_data)
-        arn_hex = binascii.hexlify(partial_binary_kms_data).decode()
+        max_header_bytes_size = 38
+        end_slice = max_header_bytes_size if data_size >= max_header_bytes_size else data_size
+        arn_hex = binascii.hexlify(partial_binary_kms_data[:end_slice]).decode()
         kms_information = {"keyid": self.__hex_to_keyid(arn_hex[:32])}
         if data_size >= 32:
             kms_information["account"] = self.__hex_to_account(arn_hex[32:64])
@@ -480,8 +518,9 @@ class KMSHeader:
             )
         if data_size >= 36:
             kms_information["algorithm"] = self.__get_algorithm(arn_hex[70:72])
-        if data_size == 38:
+        if data_size >= 38:
             kms_information["version"] = self.__reghex_to_int(arn_hex[72:76])
+        # arn_hex 76:80 is unused and assumed empty
         return kms_information
 
     def encrypt(self, plain_data):
