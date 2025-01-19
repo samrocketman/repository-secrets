@@ -245,23 +245,23 @@ class KMSHeader:
     def __len__(self):
         """Get the current size in bytes of the binary KMS Header data.
 
-        KMS Header size can vary:
+        KMS Header size can vary when calling KMSHeader.to_binary():
           0 bytes = User code must provide ARN, algorithm, and cipher data.
           35 bytes = Just ARN; user code must provide algorithm and cipher data.
-          36 bytes = ARN with KMS algorithm; user code must provide cipher data.
-          292 bytes = ARN with RSA_2048 and encrypted data.
-          420 bytes = ARN with RSA_3072 and encrypted data.
-          548 bytes = ARN with RSA_4096 and encrypted data.
+          40 bytes = ARN with KMS algorithm and version; user code must provide cipher data.
+          296 bytes = ARN with RSA_2048 and encrypted data.
+          424 bytes = ARN with RSA_3072 and encrypted data.
+          552 bytes = ARN with RSA_4096 and encrypted data.
 
         Returns:
-          36 + number of bytes that get encrypted by RSA key.
+          40 + number of bytes that get encrypted by RSA key.
         """
         if self.arn is None:
             return 0
         if self.key_spec is None:
             return 35
         if self.cipher_data is None:
-            return 36
+            return 40
         # 36 + 2-byte version + 2-byte reserve
         return 40 + self.__get_key_bytes()
 
