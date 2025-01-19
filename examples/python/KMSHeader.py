@@ -142,6 +142,22 @@ Iterating and migrating KMS header blobs:
 
   You can set the version of encrypted data with KMSHeader.set_version(int) and
   get the version in use via KMSHeader.get_version.
+
+Recommended symmetric algorithm:
+  One of the following algorithms is recommended.
+
+  - AES-CBC
+  - AES-GCM
+  - ChaCha20-Poly1305
+
+  Within the KMS Header cipher data, you should store key, salt or
+  initialization vector, and a checksum of the encrypted data.  For example,
+  AES-256-CBC would have 32-byte key and 16-byte initialization vector (IV).  You
+  could checksum the binary data with SHA-256 (32 byte data).  This means the
+  total cipher data you'd encrypt with the KMS public key is 80 bytes (key, IV,
+  and checksum).  If you're using RSA_4096 with RSAES_OAEP_SHA_1, then you
+  would have a spare 390 bytes add any other metadata you want asymmetrically
+  encrypted.  See KMSHeader.encrypt(plain_data) for details.
 """
 
 import base64
@@ -185,12 +201,7 @@ class KMSHeader:
       ValueError: If any argument provided is not valid.
     """
 
-    # 3-byte region, 16-byte AWS account ID, 16-byte kms key ID, 512-byte RSA cipher text (4096-bit key), AES cipher data unlimited
-    # region = data[:3]
-    # account = data[4:20]
-    # kms_id = data[20:35]
-    # rsa_ciphertext = data[35:548]
-    # aes_ciphertext = data[548:] I would use AES-CBC or AES-GCM or ChaCha20-Poly1305
+    # 3-byte region (1 - major_region, 2 - cardinal_endpoint, 3 - an integer)
     major_region = {
         "af": "00",
         "ap": "01",
