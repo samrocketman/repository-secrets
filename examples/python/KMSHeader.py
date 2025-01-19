@@ -68,7 +68,8 @@ Binary Format:
     16 bytes = AWS Account ID
     3 bytes = AWS Region
 
-  1 byte algorithm: RSA_2048 (0x01), RSA_3072 (0x02), RSA_4096 (0x03)
+  1 byte algorithm: RSA_2048 (0x01), RSA_3072 (0x02), RSA_4096 (0x03),
+  RSAES_OAEP_SHA_1 (0x10), RSAES_OAEP_SHA_256 (0x20)
 
   2 bytes version header; meant for users to set or get a version number for
   symmetric encryption in use by the end-user.
@@ -79,7 +80,7 @@ Binary Format:
 
   Followed by symmetrically encrypted data. (not part of the KMS header)
 
-  See also __len__(self) decription.
+  See also KMSHeader.__len__(self) description.
 
 Examles:
   Empty example
