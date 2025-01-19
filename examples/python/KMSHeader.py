@@ -62,6 +62,11 @@ Binary Format:
 
   1 byte algorithm: RSA_2048 (0x01), RSA_3072 (0x02), RSA_4096 (0x03)
 
+  2 bytes version header; meant for users to set or get a version number for
+  symmetric encryption in use by the end-user.
+
+  2 bytes reserved (potential future use)
+
   Followed 256-512 bytes of RSA cipher data. (still part of the KMS header)
 
   Followed by symmetrically encrypted data. (not part of the KMS header)
@@ -191,6 +196,7 @@ class KMSHeader:
     def __init__(
         self, arn_or_header=None, algorithm="RSAES_OAEP_SHA_256", key_spec=None
     ):
+        self.version = 0
         self.algorithm = None
         self.arn = None
         self.cipher_data = None
@@ -219,19 +225,22 @@ class KMSHeader:
             raise ValueError(
                 "arn_or_header must be 35-bytes or larger when not type string."
             )
-        if data_size >= 36:
+        if data_size >= 40:
+            arn_data = binascii.hexlify(arn_or_header[:40]).decode()
+        elif data_size >= 36:
             arn_data = binascii.hexlify(arn_or_header[:36]).decode()
         else:
             arn_data = binascii.hexlify(arn_or_header[:35]).decode()
         # assume binary data
         self.arn = self.__hex_to_kms_arn(arn_data[:70])
         if data_size >= 36:
-            self.__add_algorithm_hex(arn_data[70:])
-        if self.key_spec is None:
+            self.__add_algorithm_hex(arn_data[70:72])
+        if self.key_spec is None or data_size < 40:
             return
-        max_header_bytes = 36 + self.__get_key_bytes()
+        self.version = self.__reghex_to_int(arn_data[72:76])
+        max_header_bytes = 40 + self.__get_key_bytes()
         if data_size >= max_header_bytes:
-            self.cipher_data = arn_or_header[36:max_header_bytes]
+            self.cipher_data = arn_or_header[40:max_header_bytes]
 
     def __len__(self):
         """Get the current size in bytes of the binary KMS Header data.
@@ -253,7 +262,8 @@ class KMSHeader:
             return 35
         if self.cipher_data is None:
             return 36
-        return 36 + self.__get_key_bytes()
+        # 36 + 2-byte version + 2-byte reserve
+        return 40 + self.__get_key_bytes()
 
     @classmethod
     def from_base64(cls, b64_data):
@@ -283,6 +293,8 @@ class KMSHeader:
         header_data = self.__kms_arn_to_bin(self.arn)
         if self.key_spec is not None:
             header_data += self.__algorithm_to_bin()
+            # version + 2 bytes unused reserve (0000)
+            header_data += binascii.unhexlify(self.__regint_to_hex(self.version, 4) + "0000")
             if self.cipher_data is not None:
                 header_data += self.cipher_data
         return header_data
@@ -349,6 +361,26 @@ class KMSHeader:
         if algorithm_id > 0:
             alg_hex = self.__regint_to_hex(algorithm_id)
             self.algorithm = self.__key_by_value(self.algorithms, alg_hex)
+
+    def set_version(self, version=None):
+        """
+        Set the version header in KMSHeader.  This is intended for users to set
+        a revision for symmetric encryption algorithms they use to secure data.
+        """
+        if version is None:
+            return
+        if not isinstance(version, int) or version < 0 or version > 65535:
+            raise ValueError("version must be an int between 0 and 65535.")
+        self.version = version
+
+    def get_version(self):
+        """
+        Get the user-configurable version number.  This is intended as a
+        feature for end users because they might have more than one algorithm
+        symmetrically encrypting data.  The KMSHeader allows revising symmetric
+        algorithms up to 256 times.
+        """
+        return self.version
 
     def add_algorithm(self, algorithm=None):
         """
