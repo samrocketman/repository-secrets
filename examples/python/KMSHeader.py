@@ -515,7 +515,9 @@ class KMSHeader:
             )
         data_size = len(partial_binary_kms_data)
         max_header_bytes_size = 38
-        end_slice = max_header_bytes_size if data_size >= max_header_bytes_size else data_size
+        end_slice = (
+            max_header_bytes_size if data_size >= max_header_bytes_size else data_size
+        )
         arn_hex = binascii.hexlify(partial_binary_kms_data[:end_slice]).decode()
         kms_information = {"keyid": self.__hex_to_keyid(arn_hex[:32])}
         if data_size >= 32:
