@@ -504,8 +504,8 @@ class KMSHeader:
           header.  All data after 38 bytes is ignored since it isn't relevant.
 
         Returns:
-          A dictionary with one or more keys: keyid, account, region, and
-          algorithm.
+          A dictionary with one or more keys: keyid, account, region, kms_arn,
+          algorithm, and version.
         """
         if not isinstance(partial_binary_kms_data, bytes) or (
             len(partial_binary_kms_data) < 16
