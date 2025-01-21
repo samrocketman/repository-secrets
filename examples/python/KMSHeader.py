@@ -63,18 +63,20 @@ Developer use case:
   AWS account ID.
 
 Binary Format:
-  First 35 bytes (KMS ARN):
-    16 bytes = KMS Key ID
-    16 bytes = AWS Account ID
-    3 bytes = AWS Region
+  First 1-byte is KMS Header format version (up to 256 iterations). Internally
+  managed and should not be modified by users.
 
-  1 byte algorithm: RSA_2048 (0x01), RSA_3072 (0x02), RSA_4096 (0x03),
-  RSAES_OAEP_SHA_1 (0x10), RSAES_OAEP_SHA_256 (0x20)
+  Followed by KMS ARN (24 bytes):
+    16-byte KMS Key ID
+    5-byte AWS Account ID
+    3-byte AWS Region
 
-  2 bytes version header; meant for users to set or get a version number for
-  symmetric encryption in use by the end-user.
+  1 byte key spec and algorithm: RSA_2048 (0x01), RSA_3072 (0x02),
+  RSA_4096 (0x03), RSAES_OAEP_SHA_1 (0x10), RSAES_OAEP_SHA_256 (0x20)
 
-  2 bytes reserved (potential future use)
+  2 bytes user-configurable version header; meant for users to set or get a
+  version number for symmetric encryption in use by the end-user.  Up to 65536
+  iterations.
 
   Followed 256-512 bytes of RSA cipher data. (still part of the KMS header)
 
@@ -118,14 +120,19 @@ Examles:
 
 Iterating and migrating KMS header blobs:
   Multiple features of the KMS header have been included in consideration of
-  migrating encrypted data.  The first 16 bytes is the KMS key ID.  This means
-  you can gather which binary blobs are encrypted by a particular KMS key
-  merely by retrieving the first 16 bytes.
+  migrating encrypted data.  The first byte includes the KMS header format
+  version.  This is for KMSHeader internally handling format revisions in the
+  future while maintaining compatibility.
+
+  The first 17 bytes include the KMS key ID.  This means you can gather which
+  binary blobs are encrypted by a particular KMS key merely by retrieving the
+  first 17 bytes.
 
   KMSHeader().get_partial_kms_header(blob_data) returns a HashMap of
-  information about the encrypted data such as AWS account, region, KMS key ID,
-  KMS ARN of the private key, key spec and algorithm used to asymmetrically
-  encrypt the header, and user configurable version information.
+  information about the encrypted data such as KMSHeader format version, AWS
+  account, AWS region, KMS key ID, KMS ARN of the private key, key spec and
+  algorithm used to asymmetrically encrypt the header, header lenght in bytes,
+  and user configurable version information.
 
   A user-configurable version (2 bytes of the header) is available for
   versioning symmetric encryption configurations in use by end-users.  By
@@ -202,6 +209,8 @@ class KMSHeader:
       ValueError: If any argument provided is not valid.
     """
 
+    current_header_format = 0
+
     # 3-byte region (1 - major_region, 2 - cardinal_endpoint, 3 - an integer)
     major_region = {
         "af": "00",
@@ -239,11 +248,12 @@ class KMSHeader:
     key_specs_byte_size = {"RSA_2048": 256, "RSA_3072": 384, "RSA_4096": 512}
 
     # binary data which was RSA encrypted
-    arn_regex = r"^arn:aws:kms:([^:]+):([^:]+):key/([-0-9a-f]{36})$"
+    arn_regex = r"^arn:aws:kms:([^:]+):([0-9]{12}):key/([-0-9a-f]{36})$"
 
     def __init__(
         self, arn_or_header=None, algorithm="RSAES_OAEP_SHA_256", key_spec=None
     ):
+        self.__header_format = self.current_header_format
         self.version = 0
         self.algorithm = None
         self.arn = None
@@ -269,49 +279,49 @@ class KMSHeader:
                 "arn_or_header must be an ARN string or a binary KMS Header."
             )
         data_size = len(arn_or_header)
-        if data_size < 35:
+        if data_size < 25:
             raise ValueError(
                 "arn_or_header must be 35-bytes or larger when not type string."
             )
-        if data_size >= 40:
-            arn_data = binascii.hexlify(arn_or_header[:40]).decode()
-        elif data_size >= 36:
-            arn_data = binascii.hexlify(arn_or_header[:36]).decode()
-        else:
-            arn_data = binascii.hexlify(arn_or_header[:35]).decode()
+        header_size = 28 if data_size >= 28 else data_size
+        arn_data = binascii.hexlify(arn_or_header[:header_size]).decode()
+        self.__header_format = self.__reghex_to_int(arn_data[:2])
+        if self.__header_format > 0:
+            raise ValueError("Header format greater than 0 not supported.")
         # assume binary data
-        self.arn = self.__hex_to_kms_arn(arn_data[:70])
-        if data_size >= 36:
-            self.__add_algorithm_hex(arn_data[70:72])
-        if self.key_spec is None or data_size < 40:
+        self.arn = self.__hex_to_kms_arn(arn_data[2:50])
+        if data_size >= 26:
+            self.__add_algorithm_hex(arn_data[50:52])
+        if self.key_spec is None or data_size < 28:
             return
-        self.version = self.__reghex_to_int(arn_data[72:76])
-        max_header_bytes = 40 + self.__get_key_bytes()
+        self.version = self.__reghex_to_int(arn_data[52:56])
+        max_header_bytes = 28 + self.__get_key_bytes()
         if data_size >= max_header_bytes:
-            self.cipher_data = arn_or_header[40:max_header_bytes]
+            self.cipher_data = arn_or_header[28:max_header_bytes]
 
     def __len__(self):
         """Get the current size in bytes of the binary KMS Header data.
 
         KMS Header size can vary when calling KMSHeader.to_binary():
           0 bytes = User code must provide ARN, algorithm, and cipher data.
-          35 bytes = Just ARN; user code must provide algorithm and cipher data.
-          40 bytes = ARN with KMS algorithm and version; user code must provide cipher data.
-          296 bytes = ARN with RSA_2048 and encrypted data.
-          424 bytes = ARN with RSA_3072 and encrypted data.
-          552 bytes = ARN with RSA_4096 and encrypted data.
+          25 bytes = Just ARN; user code must provide algorithm and cipher data.
+          28 bytes = ARN with KMS algorithm and version; user code must provide cipher data.
+          284 bytes = ARN with RSA_2048 and encrypted data.
+          412 bytes = ARN with RSA_3072 and encrypted data.
+          540 bytes = ARN with RSA_4096 and encrypted data.
+
+        See also KMSHeader.encrypt(plain_data).
 
         Returns:
-          40 + number of bytes that get encrypted by RSA key.
+          0, 25, 28, or 28 + number of bytes that get encrypted by RSA key.
         """
         if self.arn is None:
             return 0
         if self.key_spec is None:
-            return 35
+            return 25
         if self.cipher_data is None:
-            return 40
-        # 36 + 2-byte version + 2-byte reserve
-        return 40 + self.__get_key_bytes()
+            return 28
+        return 28 + self.__get_key_bytes()
 
     @classmethod
     def from_base64(cls, b64_data):
@@ -338,13 +348,11 @@ class KMSHeader:
         Returns:
           Binary KMS header.
         """
-        header_data = self.__kms_arn_to_bin(self.arn)
+        header_data = binascii.unhexlify(self.__regint_to_hex(self.__header_format))
+        header_data += self.__kms_arn_to_bin(self.arn)
         if self.key_spec is not None:
             header_data += self.__algorithm_to_bin()
-            # version + 2 bytes unused reserve (0000)
-            header_data += binascii.unhexlify(
-                self.__regint_to_hex(self.version, 4) + "0000"
-            )
+            header_data += binascii.unhexlify(self.__regint_to_hex(self.version, 4))
             if self.cipher_data is not None:
                 header_data += self.cipher_data
         return header_data
@@ -500,40 +508,59 @@ class KMSHeader:
         to encrypt a blob without actually reading all of the encrypted data.
         For example, S3 allows to partially read objects.
 
+        Dictionary field definitions:
+          kms_header_format: Internal versioning of the KMS header binary
+                             format.
+          keyid: KMS key ID (part of KMS ARN)
+          account: AWS account ID (part of KMS ARN)
+          region: AWS region (part of KMS ARN)
+          kms_arn: KMS ARN
+          algorithm: A list of two items: key spec and encyphering algorithm.
+          header_size: Total bytes of KMS Header for the given
+                       kms_header_format.
+          version: Symmetric encryption version information provided by
+                   end-user during previous encryption operation.
+
         Args:
-          partial_binary_kms_data: The first 16, 32, 35, 36, or 38 bytes of a KMS
-          header.  All data after 38 bytes is ignored since it isn't relevant.
+          partial_binary_kms_data: The first 17, 22, 25, 26, or 28 bytes of a KMS
+          header.  All data after 28 bytes is ignored since it isn't relevant.
 
         Returns:
-          A dictionary with one or more keys: keyid, account, region, kms_arn,
-          algorithm, and version.
+          A dictionary with one or more keys: kms_header_format, keyid,
+          account, region, kms_arn, algorithm, header_size, and version.
         """
         if not isinstance(partial_binary_kms_data, bytes) or (
-            len(partial_binary_kms_data) < 16
+            len(partial_binary_kms_data) < 17
         ):
             raise ValueError(
-                "partial_binary_kms_data is expected to be between 16 or more bytes (after 40 bytes data is ignored)."
+                "partial_binary_kms_data is expected to be 17 or more bytes (after 28 bytes data is ignored)."
             )
         data_size = len(partial_binary_kms_data)
-        max_header_bytes_size = 38
-        end_slice = (
-            max_header_bytes_size if data_size >= max_header_bytes_size else data_size
-        )
-        arn_hex = binascii.hexlify(partial_binary_kms_data[:end_slice]).decode()
-        kms_information = {"keyid": self.__hex_to_keyid(arn_hex[:32])}
-        if data_size >= 32:
-            kms_information["account"] = self.__hex_to_account(arn_hex[32:64])
-        if data_size >= 35:
-            kms_information["region"] = self.__hex_to_region(arn_hex[64:70])
+        header_size = 28 if data_size >= 28 else data_size
+        arn_hex = binascii.hexlify(partial_binary_kms_data[:header_size]).decode()
+        kms_information = {
+            "kms_header_format": self.__reghex_to_int(arn_hex[:2]),
+            "keyid": self.__hex_to_keyid(arn_hex[2:34]),
+        }
+        if data_size >= 22:
+            kms_information["account"] = self.__hex_to_account(arn_hex[34:44])
+        if data_size >= 25:
+            kms_information["region"] = self.__hex_to_region(arn_hex[44:50])
             kms_information["kms_arn"] = "arn:aws:kms:%s:%s:key/%s" % (
                 kms_information["region"],
                 kms_information["account"],
                 kms_information["keyid"],
             )
-        if data_size >= 36:
-            kms_information["algorithm"] = self.__get_algorithm(arn_hex[70:72])
-        if data_size >= 38:
-            kms_information["version"] = self.__reghex_to_int(arn_hex[72:76])
+        if data_size >= 26:
+            kms_information["algorithm"] = self.__get_algorithm(arn_hex[50:52])
+            key_spec_bytes = self.__regint_to_hex(
+                self.__reghex_to_int("0f") & self.__reghex_to_int(arn_hex[50:52])
+            )
+            key_spec_bytes = self.__key_by_value(self.algorithms, key_spec_bytes)
+            key_spec_bytes = self.key_specs_byte_size[key_spec_bytes]
+            kms_information["header_size"] = 28 + key_spec_bytes
+        if data_size >= 28:
+            kms_information["version"] = self.__reghex_to_int(arn_hex[52:56])
         # arn_hex 76:80 is unused and assumed empty
         return kms_information
 
@@ -714,11 +741,12 @@ class KMSHeader:
         return keyid
 
     def __account_to_hex(self, account):
-        account_hex = self.__regint_to_hex(account, 32)
+        account_hex = self.__regint_to_hex(account, 10)
         return account_hex
 
     def __hex_to_account(self, account_hex):
-        return str(self.__reghex_to_int(account_hex))
+        account = str(self.__reghex_to_int(account_hex))
+        return ("0" * (12 - len(account))) + account
 
     def __kms_arn_to_hex(self, arn):
         match = re.search(self.arn_regex, arn)
@@ -750,12 +778,12 @@ class KMSHeader:
         return arn_hex
 
     def __hex_to_kms_arn(self, arn_hex):
-        match = re.search(r"^[0-9a-f]{70}$", arn_hex)
+        match = re.search(r"^[0-9a-f]{48}$", arn_hex)
         if not match:
-            raise ValueError("35-byte arn hex expected (70 chars).")
+            raise ValueError("24-byte arn hex expected (48 chars).")
         arn = "arn:aws:kms:%s:%s:key/%s" % (
-            self.__hex_to_region(arn_hex[64:]),
-            self.__hex_to_account(arn_hex[32:64]),
+            self.__hex_to_region(arn_hex[42:]),
+            self.__hex_to_account(arn_hex[32:42]),
             self.__hex_to_keyid(arn_hex[:32]),
         )
         return arn
