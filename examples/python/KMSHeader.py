@@ -281,7 +281,7 @@ class KMSHeader:
         data_size = len(arn_or_header)
         if data_size < 25:
             raise ValueError(
-                "arn_or_header must be 35-bytes or larger when not type string."
+                "arn_or_header must be 25 bytes or larger when not type string."
             )
         header_size = 28 if data_size >= 28 else data_size
         arn_data = binascii.hexlify(arn_or_header[:header_size]).decode()
