@@ -1,10 +1,8 @@
 # Securing repository secrets
 
-This is a simple proof of concept around how to secure repository secrets.
+This is a simple proof of concept for securing repository secrets.
 
-The idea is you encrypt secrets with a public key that can be widely
-distributed.  Then on a CI system or within a delivery pipeline you decrypt
-those secrets with a private key.
+The idea is to encrypt the secrets using a public key, which can be widely distributed. Then, within a CI system or delivery pipeline, the secrets are decrypted using a private key.  Examples securely storing private keys are included.
 
 * [Old Proof of concept](docs/proof_of_concept.md)
 * [2024 proof of concept](docs/2024_proof_of_concept.md)
